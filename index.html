@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ruta 90 días · Contabilidad Tributaria</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1>🎯 Ruta 90 días · Contabilidad Tributaria Colombiana</h1>
+      <div class="subtitulo">Repetición espaciada + intercalado + Feynman + recuerdo activo</div>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button data-vista="dashboard" class="activo">Panel</button>
+    <button data-vista="recall">Repaso de hoy</button>
+    <button data-vista="feynman">Reto Feynman</button>
+    <button data-vista="plan">Plan semanal</button>
+  </nav>
+
+  <main>
+    <div class="aviso">
+      <strong>Antes de empezar:</strong> este plan enseña la lógica y el procedimiento de cada
+      impuesto. Las cifras que cambian cada año (UVT, tarifas exactas, plazos) NO están incluidas
+      a propósito: verifícalas siempre en <a href="https://www.dian.gov.co" target="_blank" rel="noopener">dian.gov.co</a>
+      o en el <a href="http://www.secretariasenado.gov.co/senado/basedoc/estatuto_tributario.html" target="_blank" rel="noopener">Estatuto Tributario consolidado</a> antes de aplicarlas en un caso real. Ver más en el
+      <a href="README.md">README</a>.
+    </div>
+
+    <section id="vista-dashboard" class="vista activa">
+      <div class="grid-stats">
+        <div class="stat"><div class="valor" id="stat-dia">-</div><div class="etiqueta">Día del plan</div></div>
+        <div class="stat"><div class="valor" id="stat-semana">-</div><div class="etiqueta">Semana actual</div></div>
+        <div class="stat"><div class="valor" id="stat-racha">-</div><div class="etiqueta">Racha de días activos</div></div>
+        <div class="stat"><div class="valor" id="stat-retencion">-</div><div class="etiqueta">Retención (aciertos)</div></div>
+      </div>
+      <div class="barra-progreso"><div id="barra-dias"></div></div>
+      <div class="card-panel">
+        <h2>Hoy</h2>
+        <div id="resumen-hoy"></div>
+        <p id="resumen-tarjetas" class="fuentes"></p>
+      </div>
+      <div class="card-panel">
+        <h2>Cómo funciona este método</h2>
+        <p><strong>Repetición espaciada:</strong> cada concepto vuelve a aparecer justo antes de que lo olvides; si te cuesta, vuelve pronto; si lo dominas, se espacia más.</p>
+        <p><strong>Intercalado (interleaving):</strong> en vez de estudiar un solo impuesto por semana en bloque, mezclamos varios módulos ya vistos en cada sesión, porque así el cerebro aprende a distinguirlos en vez de memorizar en piloto automático.</p>
+        <p><strong>Recuerdo activo:</strong> respondes antes de ver la respuesta (nunca solo releas), porque el esfuerzo de recordar es lo que fija el aprendizaje.</p>
+        <p><strong>Técnica Feynman:</strong> cada día explicas un concepto en lenguaje simple; donde te trabas, ahí está tu vacío real de conocimiento.</p>
+      </div>
+    </section>
+
+    <section id="vista-recall" class="vista">
+      <div class="card-panel">
+        <span class="pill" id="progreso-sesion"></span>
+        <div id="contenedor-flash"></div>
+      </div>
+    </section>
+
+    <section id="vista-feynman" class="vista">
+      <div class="card-panel" id="panel-feynman"></div>
+    </section>
+
+    <section id="vista-plan" class="vista">
+      <div class="card-panel">
+        <h2>Plan de 12 semanas (90 días)</h2>
+        <p>Cada módulo se "activa" en su semana foco y desde entonces se intercala en las sesiones diarias con los módulos anteriores.</p>
+        <table class="plan">
+          <thead><tr><th>Semana foco</th><th>Módulo</th><th>Contenido</th><th>Estado</th></tr></thead>
+          <tbody id="cuerpo-plan"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="pie">
+    Datos guardados solo en este navegador (localStorage). Verifica siempre cifras y vigencia normativa en fuentes oficiales.
+  </footer>
+
+  <script src="data/temario.js"></script>
+  <script src="assets/app.js"></script>
+  <script src="assets/ui.js"></script>
+</body>
+</html>
