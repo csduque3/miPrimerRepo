@@ -34,10 +34,92 @@ var ENCABEZADOS = {
 // ---------------------------------------------------------------------------
 
 function doGet(e) {
+  if (!licenciaActiva_()) {
+    return HtmlService.createHtmlOutput(paginaLicenciaSuspendida_())
+      .setTitle('Carnes Parrilla')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1');
+  }
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('Carnes Parrilla')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+// ---------------------------------------------------------------------------
+// Licencia / control de pago mensual
+//
+// Esto es para TI, el proveedor del servicio, no para el restaurante: se
+// guarda en las "Propiedades del script" (Project Settings), que el
+// administrador del restaurante NUNCA ve ni puede tocar desde la app ni
+// desde el Sheet. Solo tú, abriendo este editor de Apps Script, puedes
+// cambiarlo. Úsalo así cada mes:
+//
+//   1. El restaurante te paga la mensualidad.
+//   2. Abres el proyecto de Apps Script de ESE restaurante.
+//   3. En el menú de funciones (arriba, junto a "Ejecutar") eliges
+//      "renovarLicenciaUnMes" y pulsas Ejecutar.
+//
+// Si no pagan, simplemente no renuevas: a los 30 días la licencia vence
+// sola y la app muestra el aviso de servicio suspendido. También puedes
+// suspenderla de inmediato con "suspenderLicencia".
+// ---------------------------------------------------------------------------
+
+function licenciaActiva_() {
+  var props = PropertiesService.getScriptProperties();
+  var activa = props.getProperty('LICENCIA_ACTIVA');
+  if (activa === null) {
+    // Primera vez que corre el script: se activa sola por 30 días para
+    // que puedas hacer la demo/implementación sin bloquearte a ti mismo.
+    renovarLicenciaUnMes();
+    return true;
+  }
+  if (activa !== 'si') return false;
+
+  var vencimiento = props.getProperty('LICENCIA_VENCE');
+  if (vencimiento) {
+    var hoy = new Date();
+    var fechaVencimiento = new Date(vencimiento);
+    if (hoy.getTime() > fechaVencimiento.getTime()) return false;
+  }
+  return true;
+}
+
+/** Ejecuta esta función (desde el editor) cuando el restaurante pague su mensualidad. */
+function renovarLicenciaUnMes() {
+  var props = PropertiesService.getScriptProperties();
+  var vencimiento = new Date();
+  vencimiento.setDate(vencimiento.getDate() + 30);
+  props.setProperty('LICENCIA_ACTIVA', 'si');
+  props.setProperty('LICENCIA_VENCE', vencimiento.toISOString());
+  Logger.log('Licencia activa hasta: ' + vencimiento.toDateString());
+}
+
+/** Ejecuta esta función para cortar el acceso de inmediato (no pagó / baja del servicio). */
+function suspenderLicencia() {
+  PropertiesService.getScriptProperties().setProperty('LICENCIA_ACTIVA', 'no');
+  Logger.log('Licencia suspendida. La app ahora muestra el aviso de servicio suspendido.');
+}
+
+/** Activa la licencia sin fecha de vencimiento (para casos especiales, úsalo con cuidado). */
+function activarLicenciaSinVencimiento() {
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty('LICENCIA_ACTIVA', 'si');
+  props.deleteProperty('LICENCIA_VENCE');
+  Logger.log('Licencia activa sin fecha de vencimiento.');
+}
+
+function paginaLicenciaSuspendida_() {
+  return '<!doctype html><html><head><meta charset="UTF-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+    '<style>body{font-family:Arial,sans-serif;background:#F4EBDD;color:#2B2523;' +
+    'display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:20px;' +
+    'text-align:center;}div{background:#fff;border-radius:16px;padding:30px;max-width:380px;' +
+    'box-shadow:0 2px 10px rgba(43,37,35,.15);border:3px solid #D9772B;}' +
+    'h1{color:#7A1E24;font-size:20px;}</style></head><body>' +
+    '<div><h1>Servicio temporalmente suspendido</h1>' +
+    '<p>Este restaurante tiene el servicio de pedidos por QR suspendido. ' +
+    'Contacta a tu proveedor del servicio para reactivarlo.</p></div>' +
+    '</body></html>';
 }
 
 // ---------------------------------------------------------------------------

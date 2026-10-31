@@ -125,3 +125,42 @@ Repite (o simplemente copia el mismo PNG) para cada mesa del restaurante.
 - **Concurrencia:** todas las escrituras (crear pedido, abrir mesa, marcar
   listo, etc.) usan `LockService`, así que dos acciones simultáneas no se
   pisan entre sí.
+
+## 7. Vender esto como servicio mensual (piloto manual, sin pasarela de pago)
+
+Esta plantilla está pensada para que **cada restaurante tenga su propia
+copia** (su propio Sheet y su propia implementación de Apps Script). No es
+una app multi-cliente centralizada: no hay un panel único donde se registran
+varios restaurantes ni cobro en línea integrado todavía. Para un piloto con
+pocos clientes, el control de pago funciona así:
+
+1. Por cada restaurante nuevo, repites los pasos 1 a 3 de este README
+   (Sheet nuevo, pegar el código, `crearBaseDatos()`, publicar). Tú quedas
+   como quien administra ese proyecto de Apps Script.
+2. El código ya trae un **interruptor de licencia** que **solo tú puedes
+   ver y cambiar**, desde el editor de Apps Script (nunca desde la app ni
+   desde el Sheet, así que el restaurante no puede tocarlo):
+   - La primera vez que se abre la app, la licencia se activa sola por
+     30 días (para que puedas hacer la implementación sin bloquearte).
+   - Cuando el restaurante te paga la mensualidad, abres su proyecto de
+     Apps Script, eliges en el selector de funciones **`renovarLicenciaUnMes`**
+     y pulsas **Ejecutar**. Eso extiende el acceso 30 días más.
+   - Si no paga, no hace falta que hagas nada: a los 30 días la app
+     empieza a mostrar sola un aviso de "Servicio temporalmente
+     suspendido. Contacta a tu proveedor del servicio para reactivarlo."
+     en vez del menú.
+   - Si quieres cortar el acceso de inmediato (por ejemplo, el restaurante
+     se dio de baja), ejecuta **`suspenderLicencia`**.
+3. Lleva tú, por fuera (una hoja de cálculo personal, no parte de esta
+   plantilla), el control de qué restaurante pagó y cuándo vence, para
+   saber a quién renovarle.
+
+**Límites de este modelo** (por eso es un piloto, no la versión para
+escalar): cada restaurante vive en una cuenta/proyecto de Google separado,
+por lo que mantener 20-30 clientes así ya es poco práctico de administrar
+a mano, y no hay cobro automático ni registro de nuevos clientes por sí
+mismos. Si el piloto valida que la gente paga por esto, el siguiente paso
+natural es migrar a una aplicación multi-cliente con base de datos propia,
+inicio de sesión por restaurante y cobro recurrente automatizado (por
+ejemplo con Wompi o ePayco), para no depender de que abras manualmente
+cada proyecto de Apps Script cada mes.
