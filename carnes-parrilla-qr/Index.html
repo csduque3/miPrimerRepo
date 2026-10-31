@@ -93,7 +93,7 @@
 <body>
 
 <div id="topbar">
-  <div class="marca">🔥🔪 <strong>Carnes Parrilla</strong></div>
+  <div class="marca" id="marca-topbar">🔥🔪 <strong>Carnes Parrilla</strong></div>
   <button class="suave" style="color:#fff;border-color:#fff" onclick="abrirSelectorRol()">Cambiar rol</button>
 </div>
 
@@ -140,6 +140,7 @@
         <button class="suave" onclick="verMisPedidosCliente()">Mis pedidos</button>
       </div>
     </div>
+    <div id="selector-tipos-menu" class="oculto" style="display:flex;gap:8px;overflow-x:auto;margin:14px 0;"></div>
     <div id="menu-categorias"></div>
   </div>
 
@@ -164,11 +165,17 @@
   <div id="vista-admin" class="oculto">
     <div class="tabs-admin">
       <button class="secundario" onclick="mostrarTabAdmin('productos')">Productos</button>
-      <button class="secundario" onclick="mostrarTabAdmin('usuarios')">Usuarios</button>
+      <button class="secundario" onclick="mostrarTabAdmin('tiposmenu')">Tipos de menú</button>
+      <button class="secundario" onclick="mostrarTabAdmin('mesas')">Mesas</button>
+      <button class="secundario" onclick="mostrarTabAdmin('usuarios')">Personal</button>
+      <button class="secundario" onclick="mostrarTabAdmin('marca')">Marca</button>
       <button class="secundario" onclick="mostrarTabAdmin('config')">Configuración</button>
     </div>
     <div id="admin-productos"></div>
+    <div id="admin-tiposmenu" class="oculto"></div>
+    <div id="admin-mesas" class="oculto"></div>
     <div id="admin-usuarios" class="oculto"></div>
+    <div id="admin-marca" class="oculto"></div>
     <div id="admin-config" class="oculto"></div>
   </div>
 
@@ -196,6 +203,9 @@ var estado = {
   nombreCliente: null,
   menuCache: [],
   opcionesCache: {},
+  tiposMenu: [],
+  tipoMenuActual: '',
+  config: null,
   carrito: [],              // items en construcción (antes de enviar)
   modoMeseroTomandoPedido: false,
   mesaMeseroActual: null,
@@ -305,18 +315,44 @@ function entrarConPIN() {
 
 /* ======================= MENÚ (cliente y mesero tomando pedido) ======================= */
 function cargarMenuYMostrar() {
+  mostrarVista('vista-cliente-menu');
+  llamar('obtenerTiposMenu').then(function (tipos) {
+    estado.tiposMenu = tipos;
+    estado.tipoMenuActual = tipos.length ? tipos[0].id : '';
+    pintarSelectorTiposMenu();
+    cargarProductosDeTipoActual();
+  }).catch(function () {
+    estado.tiposMenu = [];
+    estado.tipoMenuActual = '';
+    cargarProductosDeTipoActual();
+  });
+}
+
+function pintarSelectorTiposMenu() {
+  var cont = document.getElementById('selector-tipos-menu');
+  if (estado.tiposMenu.length <= 1) { cont.innerHTML = ''; cont.classList.add('oculto'); return; }
+  cont.classList.remove('oculto');
+  cont.innerHTML = estado.tiposMenu.map(function (t) {
+    return '<button class="' + (t.id === estado.tipoMenuActual ? 'primario' : 'secundario') +
+      '" onclick="cambiarTipoMenu(\'' + t.id + '\')" style="flex-shrink:0">' + t.nombre + '</button>';
+  }).join('');
+}
+
+function cambiarTipoMenu(idTipo) {
+  estado.tipoMenuActual = idTipo;
+  pintarSelectorTiposMenu();
+  cargarProductosDeTipoActual();
+}
+
+function cargarProductosDeTipoActual() {
+  var clave = 'cp_menu_cache_' + (estado.tipoMenuActual || 'todos');
   var cache = null;
-  try { cache = JSON.parse(localStorage.getItem('cp_menu_cache') || 'null'); } catch (e) {}
-  if (cache && cache.length) {
-    estado.menuCache = cache;
-    pintarMenu();
-    mostrarVista('vista-cliente-menu');
-  }
-  llamar('obtenerMenu').then(function (menu) {
+  try { cache = JSON.parse(localStorage.getItem(clave) || 'null'); } catch (e) {}
+  if (cache && cache.length) { estado.menuCache = cache; pintarMenu(); }
+  llamar('obtenerMenu', estado.tipoMenuActual || '').then(function (menu) {
     estado.menuCache = menu;
-    try { localStorage.setItem('cp_menu_cache', JSON.stringify(menu)); } catch (e) {}
+    try { localStorage.setItem(clave, JSON.stringify(menu)); } catch (e) {}
     pintarMenu();
-    mostrarVista('vista-cliente-menu');
   }).catch(mostrarError);
 }
 
@@ -924,11 +960,14 @@ function marcarListo(idPedido) {
 
 /* ======================= ADMINISTRADOR ======================= */
 function mostrarTabAdmin(tab) {
-  ['productos', 'usuarios', 'config'].forEach(function (t) {
+  ['productos', 'tiposmenu', 'mesas', 'usuarios', 'marca', 'config'].forEach(function (t) {
     document.getElementById('admin-' + t).classList.toggle('oculto', t !== tab);
   });
   if (tab === 'productos') cargarAdminProductos();
+  if (tab === 'tiposmenu') cargarAdminTiposMenu();
+  if (tab === 'mesas') cargarAdminMesas();
   if (tab === 'usuarios') cargarAdminUsuarios();
+  if (tab === 'marca') cargarAdminMarca();
   if (tab === 'config') cargarAdminConfig();
 }
 
@@ -951,11 +990,16 @@ function cargarAdminProductos() {
 }
 
 function abrirFormProducto(id) {
-  llamar('obtenerProductosAdmin').then(function (productos) {
+  Promise.all([llamar('obtenerProductosAdmin'), llamar('obtenerTiposMenuAdmin')]).then(function (r) {
+    var productos = r[0], tipos = r[1];
     var p = id ? productos.find(function (x) { return String(x.id) === String(id); }) : null;
-    p = p || { id: '', categoria: '', nombre: '', descripcion: '', precio: '', urlImagen: '', disponible: 'si', orden: productos.length + 1 };
+    p = p || { id: '', categoria: '', nombre: '', descripcion: '', precio: '', urlImagen: '', disponible: 'si', orden: productos.length + 1, tipoMenu: tipos.length ? tipos[0].id : '' };
+    var opcionesTipo = '<option value="">Sin tipo (visible en todos)</option>' + tipos.map(function (t) {
+      return '<option value="' + escapeAttr(t.id) + '"' + (String(t.id) === String(p.tipoMenu) ? ' selected' : '') + '>' + t.nombre + '</option>';
+    }).join('');
     var html = '<div class="modal-fondo" onclick="if(event.target===this) cerrarModal()"><div class="modal">' +
       '<h2>' + (id ? 'Editar producto' : 'Nuevo producto') + '</h2>' +
+      '<label class="chica">Tipo de menú</label><select id="pf-tipomenu">' + opcionesTipo + '</select>' +
       '<label class="chica">Categoría</label><input id="pf-categoria" value="' + escapeAttr(p.categoria) + '">' +
       '<label class="chica">Nombre</label><input id="pf-nombre" value="' + escapeAttr(p.nombre) + '">' +
       '<label class="chica">Descripción</label><input id="pf-descripcion" value="' + escapeAttr(p.descripcion) + '">' +
@@ -972,6 +1016,7 @@ function abrirFormProducto(id) {
 function guardarProductoForm(id) {
   var producto = {
     id: id || '',
+    tipoMenu: document.getElementById('pf-tipomenu').value,
     categoria: document.getElementById('pf-categoria').value.trim(),
     nombre: document.getElementById('pf-nombre').value.trim(),
     descripcion: document.getElementById('pf-descripcion').value.trim(),
@@ -983,7 +1028,7 @@ function guardarProductoForm(id) {
   llamar('guardarProducto', producto).then(function () {
     cerrarModal();
     cargarAdminProductos();
-    try { localStorage.removeItem('cp_menu_cache'); } catch (e) {}
+    limpiarCacheMenuCliente();
   }).catch(mostrarError);
 }
 
@@ -991,7 +1036,132 @@ function confirmarEliminarProducto(id) {
   if (!confirm('¿Eliminar este producto y sus opciones?')) return;
   llamar('eliminarProducto', id).then(function () {
     cargarAdminProductos();
-    try { localStorage.removeItem('cp_menu_cache'); } catch (e) {}
+    limpiarCacheMenuCliente();
+  }).catch(mostrarError);
+}
+
+function limpiarCacheMenuCliente() {
+  try {
+    Object.keys(localStorage).forEach(function (clave) {
+      if (clave.indexOf('cp_menu_cache') === 0) localStorage.removeItem(clave);
+    });
+  } catch (e) {}
+}
+
+/* ---- Tipos de menú ---- */
+function cargarAdminTiposMenu() {
+  llamar('obtenerTiposMenuAdmin').then(function (tipos) {
+    var html = '<p class="texto-chico">Crea varios tipos (Desayuno, Almuerzo, Carta...) si quieres que el cliente elija entre menús distintos según la hora o el día. Con uno solo, el cliente no ve selector.</p>' +
+      '<button class="primario" onclick="abrirFormTipoMenu(null)">+ Nuevo tipo de menú</button>';
+    tipos.forEach(function (t) {
+      html += '<div class="fila-tabla"><div><strong>' + t.nombre + '</strong>' +
+        '<div class="texto-chico">Orden ' + t.orden + ' · ' + (esSiTexto_(t.activo) ? 'Activo' : 'Oculto') + '</div></div>' +
+        '<div><button class="enlace" onclick="abrirFormTipoMenu(\'' + escapeAttr(t.id) + '\')">Editar</button>' +
+        '<button class="enlace" style="color:#9B2C2C" onclick="eliminarTipoMenuAdmin(\'' + escapeAttr(t.id) + '\')">Eliminar</button></div></div>';
+    });
+    document.getElementById('admin-tiposmenu').innerHTML = html;
+  }).catch(mostrarError);
+}
+
+function esSiTexto_(v) { return String(v || '').trim().toLowerCase().indexOf('s') === 0; }
+
+function abrirFormTipoMenu(id) {
+  llamar('obtenerTiposMenuAdmin').then(function (tipos) {
+    var t = id ? tipos.find(function (x) { return String(x.id) === String(id); }) : null;
+    t = t || { id: '', nombre: '', orden: tipos.length + 1, activo: 'si' };
+    var html = '<div class="modal-fondo" onclick="if(event.target===this) cerrarModal()"><div class="modal">' +
+      '<h2>' + (id ? 'Editar tipo de menú' : 'Nuevo tipo de menú') + '</h2>' +
+      '<label class="chica">Nombre (ej. Desayuno, Almuerzo, Carta)</label><input id="tmf-nombre" value="' + escapeAttr(t.nombre) + '">' +
+      '<label class="chica">Orden</label><input id="tmf-orden" type="number" value="' + t.orden + '">' +
+      '<label class="opcion-fila"><input type="checkbox" id="tmf-activo" ' + (esSiTexto_(t.activo) ? 'checked' : '') + '> Visible para los clientes</label>' +
+      '<button class="primario" style="width:100%;margin-top:14px" onclick="guardarTipoMenuForm(\'' + escapeAttr(t.id) + '\')">Guardar</button>' +
+      '</div></div>';
+    document.getElementById('capa-modales').innerHTML = html;
+  }).catch(mostrarError);
+}
+
+function guardarTipoMenuForm(id) {
+  var tipo = {
+    id: id || '',
+    nombre: document.getElementById('tmf-nombre').value.trim(),
+    orden: Number(document.getElementById('tmf-orden').value) || 0,
+    activo: document.getElementById('tmf-activo').checked ? 'si' : 'no'
+  };
+  if (!tipo.nombre) { mostrarError('Escribe un nombre para el tipo de menú.'); return; }
+  llamar('guardarTipoMenu', tipo).then(function () {
+    cerrarModal();
+    cargarAdminTiposMenu();
+  }).catch(mostrarError);
+}
+
+function eliminarTipoMenuAdmin(id) {
+  if (!confirm('¿Eliminar este tipo de menú?')) return;
+  llamar('eliminarTipoMenu', id).then(cargarAdminTiposMenu).catch(mostrarError);
+}
+
+/* ---- Mesas (crear/eliminar números de mesa) ---- */
+function cargarAdminMesas() {
+  llamar('obtenerTodasLasMesas').then(function (mesas) {
+    var html = '<p class="texto-chico">Aquí defines cuántas mesas físicas tiene el restaurante. Abrir una mesa para un cliente (generar su código de 4 dígitos) lo sigue haciendo el mesero desde su pantalla.</p>' +
+      '<div style="display:flex;gap:8px;margin-bottom:10px"><input id="mf-numero-nueva" placeholder="Número de mesa" inputmode="numeric">' +
+      '<button class="primario" onclick="agregarMesaAdmin()">+ Agregar</button></div>';
+    mesas.forEach(function (m) {
+      html += '<div class="fila-tabla"><div><strong>Mesa ' + m.numero + '</strong>' +
+        '<div class="texto-chico">' + m.estado + (m.mesero ? ' · ' + m.mesero : '') + '</div></div>' +
+        '<button class="enlace" style="color:#9B2C2C" onclick="eliminarMesaAdmin(' + m.numero + ')">Eliminar</button></div>';
+    });
+    document.getElementById('admin-mesas').innerHTML = html;
+  }).catch(mostrarError);
+}
+
+function agregarMesaAdmin() {
+  var numero = document.getElementById('mf-numero-nueva').value.trim();
+  if (!numero) return;
+  llamar('crearMesa', numero).then(cargarAdminMesas).catch(mostrarError);
+}
+
+function eliminarMesaAdmin(numero) {
+  if (!confirm('¿Eliminar la mesa ' + numero + '?')) return;
+  llamar('eliminarMesa', numero).then(cargarAdminMesas).catch(mostrarError);
+}
+
+/* ---- Marca (logo, nombre, colores) ---- */
+function cargarAdminMarca() {
+  llamar('obtenerConfig').then(function (cfg) {
+    var colores = [
+      ['colorVino', 'Color principal (botones, encabezados)', cfg.colorVino],
+      ['colorCarbon', 'Color oscuro (textos, barra superior)', cfg.colorCarbon],
+      ['colorCrema', 'Color de fondo', cfg.colorCrema],
+      ['colorBrasa', 'Color de acento (precios, avisos)', cfg.colorBrasa],
+      ['colorDorado', 'Color de detalle (bordes, íconos)', cfg.colorDorado]
+    ];
+    var html = '<div class="tarjeta">' +
+      '<label class="chica">Nombre del restaurante</label><input id="mf-nombre" value="' + escapeAttr(cfg.nombreRestaurante) + '">' +
+      '<label class="chica">URL del logo (cuadrado, liviano)</label><input id="mf-logo" value="' + escapeAttr(cfg.logoUrl) + '">';
+    colores.forEach(function (c) {
+      html += '<label class="chica">' + c[1] + '</label>' +
+        '<input id="mf-' + c[0] + '" type="color" value="' + c[2] + '" style="height:42px;padding:4px">';
+    });
+    html += '<button class="primario" style="width:100%;margin-top:14px" onclick="guardarMarcaForm()">Guardar marca</button>' +
+      '</div>';
+    document.getElementById('admin-marca').innerHTML = html;
+  }).catch(mostrarError);
+}
+
+function guardarMarcaForm() {
+  var cfg = {
+    nombreRestaurante: document.getElementById('mf-nombre').value.trim(),
+    logoUrl: document.getElementById('mf-logo').value.trim(),
+    colorVino: document.getElementById('mf-colorVino').value,
+    colorCarbon: document.getElementById('mf-colorCarbon').value,
+    colorCrema: document.getElementById('mf-colorCrema').value,
+    colorBrasa: document.getElementById('mf-colorBrasa').value,
+    colorDorado: document.getElementById('mf-colorDorado').value
+  };
+  llamar('guardarConfig', cfg).then(function (cfgGuardada) {
+    estado.config = cfgGuardada;
+    aplicarMarca(cfgGuardada);
+    mostrarAvisoTemporal('Marca actualizada');
   }).catch(mostrarError);
 }
 
@@ -1072,7 +1242,6 @@ function eliminarUsuarioAdmin(nombre) {
 function cargarAdminConfig() {
   llamar('obtenerConfig').then(function (cfg) {
     var html = '<div class="tarjeta">' +
-      '<label class="chica">Nombre del restaurante</label><input id="cf-nombre" value="' + escapeAttr(cfg.nombreRestaurante) + '">' +
       '<label class="chica">Impuesto al consumo (%)</label><input id="cf-impuesto" type="number" step="0.1" value="' + (cfg.impuestoConsumo * 100) + '">' +
       '<label class="chica">Propina sugerida (%)</label><input id="cf-propina" type="number" step="0.1" value="' + (cfg.propinaSugerida * 100) + '">' +
       '<label class="chica">Medios de pago (separados por coma)</label><input id="cf-medios" value="' + escapeAttr(cfg.mediosPago.join(',')) + '">' +
@@ -1084,7 +1253,6 @@ function cargarAdminConfig() {
 
 function guardarConfigForm() {
   var cfg = {
-    nombreRestaurante: document.getElementById('cf-nombre').value.trim(),
     impuestoConsumo: Number(document.getElementById('cf-impuesto').value) / 100,
     propinaSugerida: Number(document.getElementById('cf-propina').value) / 100,
     mediosPago: document.getElementById('cf-medios').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean)
@@ -1092,8 +1260,28 @@ function guardarConfigForm() {
   llamar('guardarConfig', cfg).then(function () { mostrarAvisoTemporal('Configuración guardada'); }).catch(mostrarError);
 }
 
+/* ======================= Marca del restaurante ======================= */
+function aplicarMarca(cfg) {
+  var raiz = document.documentElement.style;
+  raiz.setProperty('--vino', cfg.colorVino);
+  raiz.setProperty('--carbon', cfg.colorCarbon);
+  raiz.setProperty('--crema', cfg.colorCrema);
+  raiz.setProperty('--brasa', cfg.colorBrasa);
+  raiz.setProperty('--dorado', cfg.colorDorado);
+  document.title = cfg.nombreRestaurante;
+  document.getElementById('marca-topbar').innerHTML =
+    (cfg.logoUrl ? '<img src="' + cfg.logoUrl + '" alt="" style="height:28px;width:28px;border-radius:6px;object-fit:cover;vertical-align:middle">' : '🔥🔪') +
+    ' <strong>' + cfg.nombreRestaurante + '</strong>';
+}
+
 /* ======================= Inicio ======================= */
-window.onload = function () { abrirSelectorRol(); };
+window.onload = function () {
+  llamar('obtenerConfig').then(function (cfg) {
+    estado.config = cfg;
+    aplicarMarca(cfg);
+  }).catch(function () {});
+  abrirSelectorRol();
+};
 </script>
 </body>
 </html>

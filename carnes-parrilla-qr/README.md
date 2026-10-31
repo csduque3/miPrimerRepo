@@ -101,9 +101,26 @@ Repite (o simplemente copia el mismo PNG) para cada mesa del restaurante.
    la cocina marca un pedido listo, o cuando una de sus mesas pide la cuenta.
 6. Al terminar, el mesero pulsa **"Cerrar mesa"**: la mesa queda libre y el
    código deja de servir, listo para el siguiente grupo.
-7. El **administrador** entra con su PIN para editar el menú, las opciones
-   de cada plato, los usuarios/PIN del personal y la configuración general
-   (impuesto, propina sugerida, medios de pago).
+7. El **administrador** entra con su PIN y puede personalizar todo el
+   negocio desde las pestañas de su panel (ver sección siguiente).
+
+## 5.1 Lo que puede personalizar el Administrador
+
+El rol Administrador tiene 6 pestañas:
+
+| Pestaña | Para qué sirve |
+|---|---|
+| **Productos** | Crear, editar, ocultar/mostrar (disponible) y eliminar platos; a cada uno se le asigna un tipo de menú, categoría, precio, imagen y orden. |
+| **Tipos de menú** | Crear varios menús (por ejemplo "Desayuno", "Almuerzo", "Carta", "Menú del día"). Si solo hay uno, el cliente no ve ningún selector; si hay más de uno activo, el cliente ve pestañas para cambiar entre ellos. Cada producto de la pestaña "Productos" se asigna a uno de estos tipos. |
+| **Mesas** | Agregar o eliminar los números de mesa que existen físicamente en el restaurante (no confundir con "abrir" una mesa para un cliente, que sigue siendo tarea del mesero desde su pantalla). Solo se puede eliminar una mesa que esté libre. |
+| **Personal** | Crear, editar y eliminar meseros, cocineros y otros administradores, cada uno con su nombre y PIN. |
+| **Marca** | Nombre del restaurante, logo (URL de una imagen cuadrada liviana) y los 5 colores de la marca (principal, oscuro, fondo, acento, detalle). Se aplican de inmediato a toda la app, para todos los roles. |
+| **Configuración** | Impuesto al consumo, propina sugerida y medios de pago que se muestran en la pre-cuenta. |
+
+Cualquier cambio en productos o tipos de menú borra automáticamente la
+copia del menú que el navegador del cliente tiene guardada
+(`localStorage`), así que el cliente ve el cambio en su próxima visita
+sin que tengas que hacer nada más.
 
 ## 6. Notas importantes
 
@@ -164,3 +181,15 @@ natural es migrar a una aplicación multi-cliente con base de datos propia,
 inicio de sesión por restaurante y cobro recurrente automatizado (por
 ejemplo con Wompi o ePayco), para no depender de que abras manualmente
 cada proyecto de Apps Script cada mes.
+
+### Un paso intermedio: el Panel Maestro
+
+Si ya tienes varios restaurantes y abrir uno por uno cada mes para
+ejecutar `renovarLicenciaUnMes` se vuelve pesado, en `panel-maestro/` (al
+lado de esta carpeta, en la raíz del proyecto) hay una **segunda app de
+Apps Script**, exclusiva para ti, desde la que ves todos tus restaurantes
+en una sola pantalla y los activas, renuevas o suspendes con un botón —
+sin entrar al proyecto de cada uno. Conectar un restaurante a ese panel
+es opcional y no cambia nada de lo anterior: si no lo conectas, sigue
+usando el interruptor local de este mismo README. Ver
+`panel-maestro/README.md` para publicarlo y conectar restaurantes.

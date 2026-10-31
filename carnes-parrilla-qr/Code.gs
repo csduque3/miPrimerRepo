@@ -10,6 +10,7 @@
 var HOJAS = {
   MENU: 'MENU',
   OPCIONES: 'OPCIONES',
+  TIPOS_MENU: 'TIPOS_MENU',
   MESAS: 'MESAS',
   PEDIDOS: 'PEDIDOS',
   DETALLE: 'DETALLE',
@@ -19,8 +20,9 @@ var HOJAS = {
 };
 
 var ENCABEZADOS = {
-  MENU: ['id', 'categoria', 'nombre', 'descripcion', 'precio', 'urlImagen', 'disponible', 'orden'],
+  MENU: ['id', 'categoria', 'nombre', 'descripcion', 'precio', 'urlImagen', 'disponible', 'orden', 'tipoMenu'],
   OPCIONES: ['idProducto', 'grupo', 'opcion', 'tipo', 'obligatorio'],
+  TIPOS_MENU: ['id', 'nombre', 'orden', 'activo'],
   MESAS: ['numero', 'codigo', 'mesero', 'estado', 'horaApertura'],
   PEDIDOS: ['idPedido', 'mesa', 'codigo', 'cliente', 'horaEnvio', 'tomadoPor', 'estado'],
   DETALLE: ['idPedido', 'producto', 'cantidad', 'opciones', 'precioUnitario', 'subtotal'],
@@ -66,6 +68,15 @@ function doGet(e) {
 
 function licenciaActiva_() {
   var props = PropertiesService.getScriptProperties();
+  var urlPanel = props.getProperty('URL_PANEL_MAESTRO');
+  var idCliente = props.getProperty('ID_CLIENTE');
+  if (urlPanel && idCliente) {
+    return licenciaActivaRemota_(props, urlPanel, idCliente);
+  }
+  return licenciaActivaLocal_(props);
+}
+
+function licenciaActivaLocal_(props) {
   var activa = props.getProperty('LICENCIA_ACTIVA');
   if (activa === null) {
     // Primera vez que corre el script: se activa sola por 30 días para
@@ -82,6 +93,65 @@ function licenciaActiva_() {
     if (hoy.getTime() > fechaVencimiento.getTime()) return false;
   }
   return true;
+}
+
+/**
+ * Cuando este restaurante está dado de alta en el Panel Maestro (ver la
+ * carpeta panel-maestro/), la licencia ya no se controla aquí: se le
+ * pregunta al Panel Maestro. El resultado se cachea 1 hora para no
+ * perder velocidad ni depender de la red en cada clic, y si el Panel
+ * Maestro no responde se usa el último estado conocido (o "activo" si
+ * nunca se pudo consultar) para no tumbar el restaurante por un
+ * problema de red pasajero.
+ */
+function licenciaActivaRemota_(props, urlPanel, idCliente) {
+  var CACHE_MS = 60 * 60 * 1000; // 1 hora
+  var cache = props.getProperty('LICENCIA_CACHE');
+  var cacheHora = Number(props.getProperty('LICENCIA_CACHE_HORA') || 0);
+  var ahora = new Date().getTime();
+
+  if (cache && (ahora - cacheHora) < CACHE_MS) {
+    return cache === 'si';
+  }
+  try {
+    var resp = UrlFetchApp.fetch(
+      urlPanel + (urlPanel.indexOf('?') >= 0 ? '&' : '?') + 'accion=estado&idCliente=' + encodeURIComponent(idCliente),
+      { muteHttpExceptions: true }
+    );
+    var datos = JSON.parse(resp.getContentText());
+    var activo = !!datos.activo;
+    props.setProperty('LICENCIA_CACHE', activo ? 'si' : 'no');
+    props.setProperty('LICENCIA_CACHE_HORA', String(ahora));
+    return activo;
+  } catch (err) {
+    return cache ? cache === 'si' : true;
+  }
+}
+
+/**
+ * Ejecuta esto UNA VEZ por restaurante, después de registrarlo en el
+ * Panel Maestro, para que la licencia de este proyecto la controle el
+ * Panel Maestro en vez del interruptor local de aquí abajo.
+ * urlPanelMaestro: la URL /exec del Panel Maestro publicado.
+ * idCliente: el id que te dio el Panel Maestro al crear este restaurante.
+ */
+function conectarConPanelMaestro(urlPanelMaestro, idCliente) {
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty('URL_PANEL_MAESTRO', urlPanelMaestro);
+  props.setProperty('ID_CLIENTE', idCliente);
+  props.deleteProperty('LICENCIA_CACHE');
+  props.deleteProperty('LICENCIA_CACHE_HORA');
+  Logger.log('Conectado al Panel Maestro. idCliente=' + idCliente);
+}
+
+/** Si quieres volver al interruptor local (dejar de usar el Panel Maestro). */
+function desconectarDePanelMaestro() {
+  var props = PropertiesService.getScriptProperties();
+  props.deleteProperty('URL_PANEL_MAESTRO');
+  props.deleteProperty('ID_CLIENTE');
+  props.deleteProperty('LICENCIA_CACHE');
+  props.deleteProperty('LICENCIA_CACHE_HORA');
+  Logger.log('Desconectado del Panel Maestro. Ahora se usa el interruptor local.');
 }
 
 /** Ejecuta esta función (desde el editor) cuando el restaurante pague su mensualidad. */
@@ -199,6 +269,12 @@ function obtenerConfig() {
   filas.forEach(function (f) { cfg[f.clave] = f.valor; });
   return {
     nombreRestaurante: cfg.nombreRestaurante || 'Carnes Parrilla',
+    logoUrl: cfg.logoUrl || '',
+    colorVino: cfg.colorVino || '#7A1E24',
+    colorCarbon: cfg.colorCarbon || '#2B2523',
+    colorCrema: cfg.colorCrema || '#F4EBDD',
+    colorBrasa: cfg.colorBrasa || '#D9772B',
+    colorDorado: cfg.colorDorado || '#C9A45C',
     impuestoConsumo: Number(cfg.impuestoConsumo || 0.08),
     propinaSugerida: Number(cfg.propinaSugerida || 0.10),
     mediosPago: String(cfg.mediosPago || 'Efectivo,Datáfono,Nequi,Daviplata,QR Bre-B,Transferencia')
@@ -229,9 +305,16 @@ function guardarConfig(cfg) {
 // Menú y opciones
 // ---------------------------------------------------------------------------
 
-function obtenerMenu() {
+/**
+ * idTipoMenu es opcional: si se pasa, solo se devuelven los productos de
+ * ese tipo de menú (Desayuno, Almuerzo, Carta, etc.) más los que no
+ * tienen tipo asignado (para que productos viejos sigan apareciendo).
+ * Si se omite, se devuelve el menú completo sin filtrar.
+ */
+function obtenerMenu(idTipoMenu) {
   return leerFilas_(HOJAS.MENU)
     .filter(function (f) { return esSi_(f.disponible); })
+    .filter(function (f) { return !idTipoMenu || !f.tipoMenu || String(f.tipoMenu) === String(idTipoMenu); })
     .sort(function (a, b) { return (Number(a.orden) || 0) - (Number(b.orden) || 0); })
     .map(function (f) {
       return {
@@ -241,9 +324,53 @@ function obtenerMenu() {
         descripcion: f.descripcion,
         precio: Number(f.precio) || 0,
         urlImagen: f.urlImagen,
-        orden: Number(f.orden) || 0
+        orden: Number(f.orden) || 0,
+        tipoMenu: f.tipoMenu || ''
       };
     });
+}
+
+// ---------------------------------------------------------------------------
+// Tipos de menú (Desayuno, Almuerzo, Carta, Menú del día, etc.)
+// ---------------------------------------------------------------------------
+
+function obtenerTiposMenu() {
+  return leerFilas_(HOJAS.TIPOS_MENU)
+    .filter(function (f) { return esSi_(f.activo); })
+    .sort(function (a, b) { return (Number(a.orden) || 0) - (Number(b.orden) || 0); })
+    .map(function (f) { return { id: f.id, nombre: f.nombre, orden: Number(f.orden) || 0 }; });
+}
+
+function obtenerTiposMenuAdmin() {
+  return leerFilas_(HOJAS.TIPOS_MENU).sort(function (a, b) { return (Number(a.orden) || 0) - (Number(b.orden) || 0); });
+}
+
+function guardarTipoMenu(tipo) {
+  return conBloqueo_(function () {
+    var filas = leerFilas_(HOJAS.TIPOS_MENU);
+    var existente = tipo.id ? filas.find(function (f) { return String(f.id) === String(tipo.id); }) : null;
+    if (existente) {
+      actualizarFila_(HOJAS.TIPOS_MENU, existente._fila, tipo);
+    } else {
+      tipo.id = 'TM' + new Date().getTime();
+      agregarFila_(HOJAS.TIPOS_MENU, tipo);
+    }
+    return tipo.id;
+  });
+}
+
+function eliminarTipoMenu(id) {
+  return conBloqueo_(function () {
+    var productosConEseTipo = leerFilas_(HOJAS.MENU).filter(function (f) { return String(f.tipoMenu) === String(id); });
+    if (productosConEseTipo.length) {
+      throw new Error('No puedes eliminar este tipo de menú: ' + productosConEseTipo.length +
+        ' producto(s) todavía lo usan. Reasígnalos a otro tipo primero.');
+    }
+    var hoja = obtenerHoja_(HOJAS.TIPOS_MENU);
+    var fila = leerFilas_(HOJAS.TIPOS_MENU).find(function (f) { return String(f.id) === String(id); });
+    if (fila) hoja.deleteRow(fila._fila);
+    return true;
+  });
 }
 
 function obtenerOpcionesProducto(idProducto) {
@@ -321,6 +448,29 @@ function solicitarCuentaMesa(numeroMesa) {
     if (!mesa) throw new Error('Mesa no encontrada.');
     actualizarFila_(HOJAS.MESAS, mesa._fila, { estado: 'cuenta solicitada' });
     agregarFila_(HOJAS.LLAMADOS, { mesa: numeroMesa, tipo: 'pedir cuenta', hora: new Date(), atendido: 'no' });
+    return true;
+  });
+}
+
+/** El administrador crea el número físico de la mesa (sin código: eso lo genera el mesero al abrirla). */
+function crearMesa(numero) {
+  return conBloqueo_(function () {
+    if (!numero) throw new Error('Falta el número de mesa.');
+    var yaExiste = leerFilas_(HOJAS.MESAS).some(function (f) { return String(f.numero) === String(numero); });
+    if (yaExiste) throw new Error('Ya existe una mesa con ese número.');
+    agregarFila_(HOJAS.MESAS, { numero: numero, codigo: '', mesero: '', estado: 'libre', horaApertura: '' });
+    return true;
+  });
+}
+
+function eliminarMesa(numero) {
+  return conBloqueo_(function () {
+    var mesa = leerFilas_(HOJAS.MESAS).find(function (f) { return String(f.numero) === String(numero); });
+    if (!mesa) throw new Error('Mesa no encontrada.');
+    if (String(mesa.estado).toLowerCase() !== 'libre') {
+      throw new Error('No puedes eliminar una mesa ocupada. Pide al mesero que la cierre primero.');
+    }
+    obtenerHoja_(HOJAS.MESAS).deleteRow(mesa._fila);
     return true;
   });
 }
@@ -647,18 +797,25 @@ function crearBaseDatos() {
     crearHojaConEncabezados_(ss, HOJAS[clave], ENCABEZADOS[clave]);
   });
 
+  var tiposMenu = obtenerHoja_(HOJAS.TIPOS_MENU);
+  if (tiposMenu.getLastRow() === 1) {
+    tiposMenu.getRange(2, 1, 1, 4).setValues([
+      ['TM1', 'Carta', 1, 'si']
+    ]);
+  }
+
   var menu = obtenerHoja_(HOJAS.MENU);
   if (menu.getLastRow() === 1) {
-    menu.getRange(2, 1, 9, 8).setValues([
-      ['P001', 'Entradas', 'Chicharrones de cerdo', 'Chicharrón crocante con limón y ají', 18000, '', 'si', 1],
-      ['P002', 'Entradas', 'Patacones con hogao', 'Patacón verde con hogao criollo', 15000, '', 'si', 2],
-      ['P003', 'Carnes', 'Punta de anca', 'Punta de anca a la parrilla, 350 g', 42000, '', 'si', 3],
-      ['P004', 'Carnes', 'Churrasco', 'Corte de res a la parrilla, 300 g', 48000, '', 'si', 4],
-      ['P005', 'Carnes', 'Chuleta de cerdo', 'Chuleta de cerdo a la parrilla, 300 g', 36000, '', 'si', 5],
-      ['P006', 'Acompañamientos', 'Papa criolla', 'Papa criolla salteada con cebolla', 9000, '', 'si', 6],
-      ['P007', 'Acompañamientos', 'Arepa de choclo', 'Arepa de choclo con queso', 8000, '', 'si', 7],
-      ['P008', 'Bebidas', 'Limonada de coco', 'Limonada natural de coco', 9000, '', 'si', 8],
-      ['P009', 'Postres', 'Flan de café', 'Flan casero de café', 10000, '', 'si', 9]
+    menu.getRange(2, 1, 9, 9).setValues([
+      ['P001', 'Entradas', 'Chicharrones de cerdo', 'Chicharrón crocante con limón y ají', 18000, '', 'si', 1, 'TM1'],
+      ['P002', 'Entradas', 'Patacones con hogao', 'Patacón verde con hogao criollo', 15000, '', 'si', 2, 'TM1'],
+      ['P003', 'Carnes', 'Punta de anca', 'Punta de anca a la parrilla, 350 g', 42000, '', 'si', 3, 'TM1'],
+      ['P004', 'Carnes', 'Churrasco', 'Corte de res a la parrilla, 300 g', 48000, '', 'si', 4, 'TM1'],
+      ['P005', 'Carnes', 'Chuleta de cerdo', 'Chuleta de cerdo a la parrilla, 300 g', 36000, '', 'si', 5, 'TM1'],
+      ['P006', 'Acompañamientos', 'Papa criolla', 'Papa criolla salteada con cebolla', 9000, '', 'si', 6, 'TM1'],
+      ['P007', 'Acompañamientos', 'Arepa de choclo', 'Arepa de choclo con queso', 8000, '', 'si', 7, 'TM1'],
+      ['P008', 'Bebidas', 'Limonada de coco', 'Limonada natural de coco', 9000, '', 'si', 8, 'TM1'],
+      ['P009', 'Postres', 'Flan de café', 'Flan casero de café', 10000, '', 'si', 9, 'TM1']
     ]);
   }
 
@@ -694,8 +851,14 @@ function crearBaseDatos() {
 
   var config = obtenerHoja_(HOJAS.CONFIG);
   if (config.getLastRow() === 1) {
-    config.getRange(2, 1, 4, 2).setValues([
+    config.getRange(2, 1, 10, 2).setValues([
       ['nombreRestaurante', 'Carnes Parrilla'],
+      ['logoUrl', ''],
+      ['colorVino', '#7A1E24'],
+      ['colorCarbon', '#2B2523'],
+      ['colorCrema', '#F4EBDD'],
+      ['colorBrasa', '#D9772B'],
+      ['colorDorado', '#C9A45C'],
       ['impuestoConsumo', '0.08'],
       ['propinaSugerida', '0.10'],
       ['mediosPago', 'Efectivo,Datáfono,Nequi,Daviplata,QR Bre-B,Transferencia']
