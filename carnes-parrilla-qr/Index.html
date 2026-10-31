@@ -3,6 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="UTF-8" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
   :root{
     --vino:#7A1E24;
@@ -82,6 +83,10 @@
   .contador{background:var(--crema);border-radius:10px;padding:10px;text-align:center;font-weight:700;
     color:var(--vino);}
   .tabs-admin{display:flex;gap:8px;overflow-x:auto;margin-bottom:14px;}
+  .grid-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;}
+  .stat{background:var(--blanco);border-radius:var(--radio);box-shadow:var(--sombra);padding:14px;text-align:center;}
+  .stat .valor{font-size:20px;font-weight:800;color:var(--vino);}
+  .stat .etiqueta{font-size:12px;color:#5b5451;margin-top:2px;}
   .tabs-admin button{flex-shrink:0;}
   .fila-tabla{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee2d2;gap:8px;}
   .texto-chico{font-size:12px;color:#7a736e;}
@@ -170,6 +175,7 @@
       <button class="secundario" onclick="mostrarTabAdmin('usuarios')">Personal</button>
       <button class="secundario" onclick="mostrarTabAdmin('marca')">Marca</button>
       <button class="secundario" onclick="mostrarTabAdmin('config')">Configuración</button>
+      <button class="secundario" onclick="mostrarTabAdmin('estadisticas')">Estadísticas</button>
     </div>
     <div id="admin-productos"></div>
     <div id="admin-tiposmenu" class="oculto"></div>
@@ -177,6 +183,7 @@
     <div id="admin-usuarios" class="oculto"></div>
     <div id="admin-marca" class="oculto"></div>
     <div id="admin-config" class="oculto"></div>
+    <div id="admin-estadisticas" class="oculto"></div>
   </div>
 
 </div>
@@ -960,7 +967,7 @@ function marcarListo(idPedido) {
 
 /* ======================= ADMINISTRADOR ======================= */
 function mostrarTabAdmin(tab) {
-  ['productos', 'tiposmenu', 'mesas', 'usuarios', 'marca', 'config'].forEach(function (t) {
+  ['productos', 'tiposmenu', 'mesas', 'usuarios', 'marca', 'config', 'estadisticas'].forEach(function (t) {
     document.getElementById('admin-' + t).classList.toggle('oculto', t !== tab);
   });
   if (tab === 'productos') cargarAdminProductos();
@@ -969,6 +976,7 @@ function mostrarTabAdmin(tab) {
   if (tab === 'usuarios') cargarAdminUsuarios();
   if (tab === 'marca') cargarAdminMarca();
   if (tab === 'config') cargarAdminConfig();
+  if (tab === 'estadisticas') cargarAdminEstadisticas();
 }
 
 function cargarAdminProductos() {
@@ -1258,6 +1266,116 @@ function guardarConfigForm() {
     mediosPago: document.getElementById('cf-medios').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean)
   };
   llamar('guardarConfig', cfg).then(function () { mostrarAvisoTemporal('Configuración guardada'); }).catch(mostrarError);
+}
+
+/* ---- Estadísticas (ventas, propinas estimadas, productos) ---- */
+estado.rangoEstadisticas = 'hoy';
+estado.graficos = {};
+
+function formatoFechaISO_(fecha) {
+  var y = fecha.getFullYear();
+  var m = String(fecha.getMonth() + 1).padStart(2, '0');
+  var d = String(fecha.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + d;
+}
+
+function calcularRangoFechas(rango) {
+  var hoy = new Date();
+  var desde, hasta = formatoFechaISO_(hoy);
+  if (rango === 'hoy') {
+    desde = formatoFechaISO_(hoy);
+  } else if (rango === '7dias') {
+    var d7 = new Date(hoy); d7.setDate(d7.getDate() - 6);
+    desde = formatoFechaISO_(d7);
+  } else if (rango === 'mes') {
+    desde = formatoFechaISO_(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+  } else if (rango === '30dias') {
+    var d30 = new Date(hoy); d30.setDate(d30.getDate() - 29);
+    desde = formatoFechaISO_(d30);
+  } else if (rango === 'todo') {
+    desde = ''; hasta = '';
+  } else { // personalizado: se toma de los inputs
+    desde = (document.getElementById('est-desde') || {}).value || '';
+    hasta = (document.getElementById('est-hasta') || {}).value || '';
+  }
+  return { desde: desde, hasta: hasta };
+}
+
+function cargarAdminEstadisticas() {
+  var cont = document.getElementById('admin-estadisticas');
+  cont.innerHTML =
+    '<div class="tabs-admin" style="margin-bottom:10px">' +
+      ['hoy:Hoy', '7dias:7 días', 'mes:Este mes', '30dias:30 días', 'todo:Todo', 'personalizado:Personalizado'].map(function (op) {
+        var partes = op.split(':');
+        return '<button class="' + (estado.rangoEstadisticas === partes[0] ? 'primario' : 'secundario') +
+          '" onclick="seleccionarRangoEstadisticas(\'' + partes[0] + '\')">' + partes[1] + '</button>';
+      }).join('') +
+    '</div>' +
+    '<div id="est-personalizado" class="tarjeta oculto" style="display:flex;gap:8px;align-items:end">' +
+      '<div style="flex:1"><label class="chica">Desde</label><input id="est-desde" type="date"></div>' +
+      '<div style="flex:1"><label class="chica">Hasta</label><input id="est-hasta" type="date"></div>' +
+      '<button class="primario" onclick="aplicarRangoPersonalizado()">Aplicar</button>' +
+    '</div>' +
+    '<div id="est-kpis" class="grid-stats"></div>' +
+    '<div class="tarjeta"><h3 style="margin-top:0">Ventas por mesero</h3><canvas id="grafico-mesero" height="180"></canvas></div>' +
+    '<div class="tarjeta"><h3 style="margin-top:0">Propina estimada por mesero</h3>' +
+      '<p class="texto-chico">Estimada = ventas del mesero × propina sugerida configurada. La app no cobra en línea, así que no sabe cuánta propina pagó cada mesa en la realidad.</p>' +
+      '<canvas id="grafico-propina" height="180"></canvas></div>' +
+    '<div class="tarjeta"><h3 style="margin-top:0">Ventas por día</h3><canvas id="grafico-dia" height="180"></canvas></div>' +
+    '<div class="tarjeta"><h3 style="margin-top:0">Productos más vendidos</h3><canvas id="grafico-productos" height="200"></canvas></div>';
+  document.getElementById('est-personalizado').classList.toggle('oculto', estado.rangoEstadisticas !== 'personalizado');
+  if (estado.rangoEstadisticas !== 'personalizado') refrescarEstadisticas();
+}
+
+function seleccionarRangoEstadisticas(rango) {
+  estado.rangoEstadisticas = rango;
+  cargarAdminEstadisticas();
+}
+
+function aplicarRangoPersonalizado() {
+  refrescarEstadisticas();
+}
+
+function refrescarEstadisticas() {
+  var rango = calcularRangoFechas(estado.rangoEstadisticas);
+  llamar('obtenerEstadisticas', rango.desde, rango.hasta).then(pintarEstadisticas).catch(mostrarError);
+}
+
+function pintarEstadisticas(data) {
+  document.getElementById('est-kpis').innerHTML =
+    '<div class="stat"><div class="valor">' + formatoCOP(data.ventasTotales) + '</div><div class="etiqueta">Ventas</div></div>' +
+    '<div class="stat"><div class="valor">' + data.numPedidos + '</div><div class="etiqueta">Pedidos</div></div>' +
+    '<div class="stat"><div class="valor">' + formatoCOP(data.ticketPromedio) + '</div><div class="etiqueta">Ticket promedio</div></div>' +
+    '<div class="stat"><div class="valor">' + formatoCOP(data.propinaEstimadaTotal) + '</div><div class="etiqueta">Propina estimada</div></div>' +
+    '<div class="stat"><div class="valor">' + data.pedidosAnulados + '</div><div class="etiqueta">Pedidos anulados</div></div>';
+
+  dibujarGrafico('grafico-mesero', 'bar', data.porMesero.map(function (m) { return m.mesero; }),
+    [{ label: 'Ventas', data: data.porMesero.map(function (m) { return m.ventas; }), backgroundColor: '#7A1E24' }]);
+
+  dibujarGrafico('grafico-propina', 'bar', data.porMesero.map(function (m) { return m.mesero; }),
+    [{ label: 'Propina estimada', data: data.porMesero.map(function (m) { return m.propinaEstimada; }), backgroundColor: '#C9A45C' }]);
+
+  dibujarGrafico('grafico-dia', 'line', data.porDia.map(function (d) { return d.dia; }),
+    [{ label: 'Ventas', data: data.porDia.map(function (d) { return d.ventas; }), borderColor: '#D9772B', backgroundColor: 'rgba(217,119,43,.25)', fill: true, tension: .25 }]);
+
+  dibujarGrafico('grafico-productos', 'bar', data.topProductos.map(function (p) { return p.producto; }),
+    [{ label: 'Ventas', data: data.topProductos.map(function (p) { return p.ventas; }), backgroundColor: '#2B2523' }],
+    true);
+}
+
+function dibujarGrafico(idCanvas, tipo, etiquetas, datasets, horizontal) {
+  var canvas = document.getElementById(idCanvas);
+  if (!canvas || typeof Chart === 'undefined') return;
+  if (estado.graficos[idCanvas]) estado.graficos[idCanvas].destroy();
+  estado.graficos[idCanvas] = new Chart(canvas.getContext('2d'), {
+    type: tipo,
+    data: { labels: etiquetas, datasets: datasets },
+    options: {
+      indexAxis: horizontal ? 'y' : 'x',
+      plugins: { legend: { display: datasets.length > 1 } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
 }
 
 /* ======================= Marca del restaurante ======================= */

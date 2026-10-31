@@ -106,7 +106,7 @@ Repite (o simplemente copia el mismo PNG) para cada mesa del restaurante.
 
 ## 5.1 Lo que puede personalizar el Administrador
 
-El rol Administrador tiene 6 pestañas:
+El rol Administrador tiene 7 pestañas:
 
 | Pestaña | Para qué sirve |
 |---|---|
@@ -116,11 +116,42 @@ El rol Administrador tiene 6 pestañas:
 | **Personal** | Crear, editar y eliminar meseros, cocineros y otros administradores, cada uno con su nombre y PIN. |
 | **Marca** | Nombre del restaurante, logo (URL de una imagen cuadrada liviana) y los 5 colores de la marca (principal, oscuro, fondo, acento, detalle). Se aplican de inmediato a toda la app, para todos los roles. |
 | **Configuración** | Impuesto al consumo, propina sugerida y medios de pago que se muestran en la pre-cuenta. |
+| **Estadísticas** | Gráficas de ventas y propinas. Ver detalle abajo. |
 
 Cualquier cambio en productos o tipos de menú borra automáticamente la
 copia del menú que el navegador del cliente tiene guardada
 (`localStorage`), así que el cliente ve el cambio en su próxima visita
 sin que tengas que hacer nada más.
+
+### Estadísticas
+
+La pestaña "Estadísticas" deja elegir un rango (Hoy, 7 días, Este mes,
+30 días, Todo, o Personalizado con fechas exactas) y muestra, sobre los
+pedidos de ese rango (sin contar los anulados):
+
+- **Tarjetas resumen:** ventas totales, número de pedidos, ticket
+  promedio, propina estimada total y pedidos anulados.
+- **Ventas por mesero:** a cada pedido se le atribuye el mesero
+  responsable de esa mesa en el momento en que se envió (aunque el
+  pedido lo haya enviado el cliente directamente desde su celular, no
+  solo cuando el mesero lo toma por él); los pedidos que un cliente hizo
+  en una mesa sin mesero asignado aparecen agrupados como "Pedido directo
+  del cliente".
+- **Propina estimada por mesero:** `ventas del mesero × propina sugerida
+  configurada`. Es una estimación, no un cobro real: esta app no procesa
+  pagos en línea, así que no existe manera de saber cuánta propina pagó
+  cada mesa en efectivo o datáfono. Úsala como referencia para repartir
+  propinas, no como un valor exacto.
+- **Ventas por día:** para ver la tendencia dentro del rango elegido.
+- **Productos más vendidos:** por valor de ventas, con la cantidad
+  vendida de cada uno.
+
+Si ya tenías un restaurante funcionando antes de esta actualización,
+abre su Google Sheet y ejecuta de nuevo `crearBaseDatos()` una vez desde
+el editor de Apps Script: eso agrega la columna `mesero` que falta en la
+hoja `PEDIDOS` sin borrar ningún pedido existente (los pedidos anteriores
+a la actualización simplemente no tendrán mesero atribuido en las
+estadísticas).
 
 ## 6. Notas importantes
 

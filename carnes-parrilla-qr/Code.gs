@@ -24,7 +24,7 @@ var ENCABEZADOS = {
   OPCIONES: ['idProducto', 'grupo', 'opcion', 'tipo', 'obligatorio'],
   TIPOS_MENU: ['id', 'nombre', 'orden', 'activo'],
   MESAS: ['numero', 'codigo', 'mesero', 'estado', 'horaApertura'],
-  PEDIDOS: ['idPedido', 'mesa', 'codigo', 'cliente', 'horaEnvio', 'tomadoPor', 'estado'],
+  PEDIDOS: ['idPedido', 'mesa', 'codigo', 'cliente', 'horaEnvio', 'tomadoPor', 'estado', 'mesero'],
   DETALLE: ['idPedido', 'producto', 'cantidad', 'opciones', 'precioUnitario', 'subtotal'],
   LLAMADOS: ['mesa', 'tipo', 'hora', 'atendido'],
   USUARIOS: ['nombre', 'rol', 'pin'],
@@ -495,6 +495,7 @@ function construirPedidosConDetalle_(pedidos) {
       estado: p.estado,
       horaEnvio: p.horaEnvio,
       tomadoPor: p.tomadoPor,
+      mesero: p.mesero || '',
       items: detalle.filter(function (d) { return d.idPedido === p.idPedido; }).map(function (d) {
         return {
           producto: d.producto,
@@ -515,11 +516,14 @@ function crearPedido(mesa, codigo, cliente, tomadoPor, items) {
   if (!cliente) throw new Error('Falta el nombre del cliente.');
   if (!items || !items.length) throw new Error('El pedido está vacío.');
   return conBloqueo_(function () {
-    validarCodigoMesa(mesa, codigo);
+    var mesaInfo = validarCodigoMesa(mesa, codigo);
     var idPedido = Utilities.getUuid();
     agregarFila_(HOJAS.PEDIDOS, {
+      // "mesero" queda fijo al mesero responsable de la mesa en el momento del
+      // pedido, así se le puede atribuir la venta aunque el pedido lo haya
+      // enviado el cliente directamente (no solo cuando lo toma el mesero).
       idPedido: idPedido, mesa: mesa, codigo: codigo, cliente: cliente,
-      horaEnvio: new Date(), tomadoPor: tomadoPor, estado: 'enviado'
+      horaEnvio: new Date(), tomadoPor: tomadoPor, estado: 'enviado', mesero: mesaInfo.mesero || ''
     });
     items.forEach(function (it) {
       agregarFila_(HOJAS.DETALLE, {
@@ -680,6 +684,103 @@ function iniciarSesionPIN(pin) {
   var usuario = leerFilas_(HOJAS.USUARIOS).find(function (u) { return String(u.pin) === String(pin); });
   if (!usuario) throw new Error('PIN incorrecto.');
   return { nombre: usuario.nombre, rol: String(usuario.rol).toLowerCase() };
+}
+
+// ---------------------------------------------------------------------------
+// Estadísticas (ventas, propinas estimadas, productos más vendidos)
+// ---------------------------------------------------------------------------
+
+function dentroDeRango_(fechaValor, desdeF, hastaF) {
+  var f = new Date(fechaValor);
+  if (desdeF && f.getTime() < desdeF.getTime()) return false;
+  if (hastaF && f.getTime() > hastaF.getTime()) return false;
+  return true;
+}
+
+function aArregloOrdenado_(mapa) {
+  return Object.keys(mapa)
+    .map(function (clave) { return { etiqueta: clave, valor: Math.round(mapa[clave] * 100) / 100 }; })
+    .sort(function (a, b) { return b.valor - a.valor; });
+}
+
+/**
+ * desde/hasta: texto 'YYYY-MM-DD' (ambos incluidos). Si se omiten, se
+ * calculan sobre todo el histórico. La propina siempre es "estimada":
+ * esta app no cobra en línea, así que no hay forma de saber cuánta
+ * propina pagó cada mesa en la realidad; se calcula como
+ * ventas × propina sugerida configurada, solo como referencia.
+ */
+function obtenerEstadisticas(desde, hasta) {
+  var cfg = obtenerConfig();
+  var zonaHoraria = Session.getScriptTimeZone() || 'America/Bogota';
+  var desdeF = desde ? new Date(desde + 'T00:00:00') : null;
+  var hastaF = hasta ? new Date(hasta + 'T23:59:59') : null;
+
+  var detallePorPedido = {};
+  leerFilas_(HOJAS.DETALLE).forEach(function (d) {
+    (detallePorPedido[d.idPedido] = detallePorPedido[d.idPedido] || []).push(d);
+  });
+
+  var todosLosPedidos = leerFilas_(HOJAS.PEDIDOS);
+  var pedidosAnuladosEnRango = 0;
+  var pedidosValidos = [];
+  todosLosPedidos.forEach(function (p) {
+    var enRango = dentroDeRango_(p.horaEnvio, desdeF, hastaF);
+    if (!enRango) return;
+    if (String(p.estado) === 'anulado') { pedidosAnuladosEnRango++; return; }
+    pedidosValidos.push(p);
+  });
+
+  var ventasTotales = 0;
+  var ventasPorMesero = {};
+  var ventasPorDia = {};
+  var ventasPorProducto = {};
+  var cantidadPorProducto = {};
+
+  pedidosValidos.forEach(function (p) {
+    var items = detallePorPedido[p.idPedido] || [];
+    var totalPedido = items.reduce(function (s, it) { return s + (Number(it.subtotal) || 0); }, 0);
+    ventasTotales += totalPedido;
+
+    var mesero = p.mesero || (String(p.tomadoPor) === 'cliente' ? 'Pedido directo del cliente' : p.tomadoPor) || 'Sin asignar';
+    ventasPorMesero[mesero] = (ventasPorMesero[mesero] || 0) + totalPedido;
+
+    var dia = Utilities.formatDate(new Date(p.horaEnvio), zonaHoraria, 'yyyy-MM-dd');
+    ventasPorDia[dia] = (ventasPorDia[dia] || 0) + totalPedido;
+
+    items.forEach(function (it) {
+      ventasPorProducto[it.producto] = (ventasPorProducto[it.producto] || 0) + (Number(it.subtotal) || 0);
+      cantidadPorProducto[it.producto] = (cantidadPorProducto[it.producto] || 0) + (Number(it.cantidad) || 0);
+    });
+  });
+
+  var porMesero = aArregloOrdenado_(ventasPorMesero).map(function (m) {
+    return {
+      mesero: m.etiqueta,
+      ventas: m.valor,
+      pedidos: pedidosValidos.filter(function (p) {
+        var mesero = p.mesero || (String(p.tomadoPor) === 'cliente' ? 'Pedido directo del cliente' : p.tomadoPor) || 'Sin asignar';
+        return mesero === m.etiqueta;
+      }).length,
+      propinaEstimada: Math.round(m.valor * cfg.propinaSugerida * 100) / 100
+    };
+  });
+
+  var topProductos = aArregloOrdenado_(ventasPorProducto).slice(0, 8).map(function (x) {
+    return { producto: x.etiqueta, ventas: x.valor, cantidad: cantidadPorProducto[x.etiqueta] || 0 };
+  });
+
+  return {
+    desde: desde || '', hasta: hasta || '',
+    ventasTotales: Math.round(ventasTotales * 100) / 100,
+    numPedidos: pedidosValidos.length,
+    ticketPromedio: pedidosValidos.length ? Math.round((ventasTotales / pedidosValidos.length) * 100) / 100 : 0,
+    propinaEstimadaTotal: Math.round(ventasTotales * cfg.propinaSugerida * 100) / 100,
+    pedidosAnulados: pedidosAnuladosEnRango,
+    porMesero: porMesero,
+    porDia: Object.keys(ventasPorDia).sort().map(function (d) { return { dia: d, ventas: Math.round(ventasPorDia[d] * 100) / 100 }; }),
+    topProductos: topProductos
+  };
 }
 
 // ---------------------------------------------------------------------------
