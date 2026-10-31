@@ -50,6 +50,13 @@
     transition:transform .15s ease;cursor:pointer;}
   .modal-fondo{position:fixed;inset:0;background:rgba(43,37,35,.55);display:flex;align-items:flex-end;
     justify-content:center;z-index:60;}
+  .fondo-aviso-urgente{position:fixed;inset:0;background:rgba(122,30,36,.7);display:flex;
+    align-items:center;justify-content:center;z-index:80;padding:16px;}
+  .aviso-urgente{background:var(--blanco);border-radius:20px;max-width:420px;width:100%;
+    padding:26px 22px;text-align:center;box-shadow:var(--sombra);border:4px solid var(--brasa);
+    animation:pulso 1s ease-in-out infinite;}
+  @keyframes pulso{0%,100%{transform:scale(1);}50%{transform:scale(1.03);}}
+  .aviso-urgente .icono{font-size:46px;}
   .modal{background:var(--blanco);border-radius:20px 20px 0 0;max-width:640px;width:100%;
     max-height:88vh;overflow-y:auto;padding:20px;animation:subir .18s ease;}
   @keyframes subir{from{transform:translateY(30px);opacity:0;}to{transform:translateY(0);opacity:1;}}
@@ -177,10 +184,7 @@
 <div id="aviso-flotante" class="aviso-flotante oculto"></div>
 
 <div id="capa-modales"></div>
-
-<audio id="sonido-aviso" preload="auto">
-  <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=" type="audio/wav">
-</audio>
+<div id="capa-avisos"></div>
 
 <script>
 /* ======================= Estado global ======================= */
@@ -198,7 +202,11 @@ var estado = {
   nombreClienteMesero: '',
   intervaloSondeo: null,
   pendienteEnvio: null,     // pedido con cuenta regresiva de 10s
-  llamadosVistos: {}
+  llamadosVistos: {},       // _fila de LLAMADOS ya encolados, para no duplicar avisos
+  colaAvisos: [],           // llamados pendientes de mostrar al mesero
+  avisoActivo: null,        // llamado que se está mostrando ahora mismo
+  loopAviso: null,          // interval id del sonido+vibración en bucle
+  contextoAudio: null
 };
 
 /* ======================= Utilidad: llamadas al servidor ======================= */
@@ -281,6 +289,7 @@ function entrarConPIN() {
   var pin = document.getElementById('in-pin').value.trim();
   var err = document.getElementById('error-login-pin');
   if (!pin) { err.textContent = 'Escribe tu PIN.'; return; }
+  desbloquearSonidoMesero(); // gesto del usuario: habilita el audio para las alertas
   llamar('iniciarSesionPIN', pin).then(function (usuario) {
     if (usuario.rol !== estado.rolEnLogin) {
       err.textContent = 'Ese PIN no corresponde a este rol.';
@@ -799,24 +808,89 @@ function sondearMesero() {
   llamar('sondeoMesero', estado.usuario.nombre).then(function (r) {
     pintarMesasMesero(r.mesas);
     r.llamados.forEach(function (l) {
-      var clave = l.mesa + '|' + l.tipo + '|' + l.hora;
-      if (!estado.llamadosVistos[clave]) {
-        estado.llamadosVistos[clave] = true;
-        notificarMesero(l);
+      if (!estado.llamadosVistos[l._fila]) {
+        estado.llamadosVistos[l._fila] = true;
+        estado.colaAvisos.push(l);
       }
     });
+    procesarColaAvisos();
   }).catch(function () {});
 }
 
-function notificarMesero(llamado) {
+/* --- Alerta urgente para el mesero: sonido real + vibración en bucle
+   hasta que confirme. Esto es lo que diferencia la app de un simple
+   menú QR: el mesero no puede ignorar un llamado por accidente. --- */
+
+function desbloquearSonidoMesero() {
+  // Los navegadores móviles solo permiten crear/activar el audio dentro
+  // de un gesto del usuario; aprovechamos el toque en "Entrar" del login.
+  try {
+    estado.contextoAudio = estado.contextoAudio || new (window.AudioContext || window.webkitAudioContext)();
+    if (estado.contextoAudio.state === 'suspended') estado.contextoAudio.resume();
+  } catch (e) {}
+}
+
+function reproducirSonidoAviso() {
+  try {
+    var ctx = estado.contextoAudio = estado.contextoAudio || new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume();
+    [0, 220, 440].forEach(function (retraso, i) {
+      setTimeout(function () {
+        var osc = ctx.createOscillator();
+        var ganancia = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = i % 2 === 0 ? 880 : 1175;
+        ganancia.gain.value = 0.18;
+        osc.connect(ganancia);
+        ganancia.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.18);
+      }, retraso);
+    });
+  } catch (e) {}
+}
+
+function vibrarAviso() {
+  try { if (navigator.vibrate) navigator.vibrate([250, 100, 250, 100, 250]); } catch (e) {}
+}
+
+function procesarColaAvisos() {
+  if (estado.avisoActivo || !estado.colaAvisos.length) return;
+  var llamado = estado.colaAvisos.shift();
+  estado.avisoActivo = llamado;
+  mostrarAvisoUrgente(llamado);
+  reproducirSonidoAviso();
+  vibrarAviso();
+  estado.loopAviso = setInterval(function () {
+    reproducirSonidoAviso();
+    vibrarAviso();
+  }, 2200);
+}
+
+function mostrarAvisoUrgente(llamado) {
   var textos = {
-    'llamar mesero': 'La mesa ' + llamado.mesa + ' te está llamando 🔔',
-    'pedido listo': 'El pedido de la mesa ' + llamado.mesa + ' está listo 🍽️',
-    'pedir cuenta': 'La mesa ' + llamado.mesa + ' pidió la cuenta 🧾'
+    'llamar mesero': { icono: '🔔', texto: 'La mesa ' + llamado.mesa + ' te está llamando' },
+    'pedido listo': { icono: '🍽️', texto: 'El pedido de la mesa ' + llamado.mesa + ' está listo' },
+    'pedir cuenta': { icono: '🧾', texto: 'La mesa ' + llamado.mesa + ' pidió la cuenta' }
   };
-  mostrarAvisoTemporal(textos[llamado.tipo] || ('Mesa ' + llamado.mesa));
-  try { document.getElementById('sonido-aviso').play(); } catch (e) {}
-  try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {}
+  var info = textos[llamado.tipo] || { icono: '🔔', texto: 'Mesa ' + llamado.mesa };
+  document.getElementById('capa-avisos').innerHTML =
+    '<div class="fondo-aviso-urgente"><div class="aviso-urgente">' +
+    '<div class="icono">' + info.icono + '</div>' +
+    '<h2>' + info.texto + '</h2>' +
+    '<button class="primario" style="width:100%;margin-top:14px" onclick="confirmarAvisoUrgente()">Entendido</button>' +
+    '</div></div>';
+}
+
+function confirmarAvisoUrgente() {
+  if (estado.loopAviso) { clearInterval(estado.loopAviso); estado.loopAviso = null; }
+  document.getElementById('capa-avisos').innerHTML = '';
+  var llamado = estado.avisoActivo;
+  estado.avisoActivo = null;
+  if (llamado && llamado._fila) {
+    llamar('atenderLlamado', llamado._fila).catch(function () {});
+  }
+  procesarColaAvisos();
 }
 
 /* ======================= COCINA ======================= */
