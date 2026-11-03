@@ -1,0 +1,1405 @@
+<!doctype html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="UTF-8" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --vino:#7A1E24;
+    --carbon:#2B2523;
+    --crema:#F4EBDD;
+    --brasa:#D9772B;
+    --dorado:#C9A45C;
+    --blanco:#FFFFFF;
+    --radio:14px;
+    --sombra:0 2px 10px rgba(43,37,35,.15);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--crema);color:var(--carbon);
+    font-family:'Segoe UI',Arial,sans-serif;-webkit-tap-highlight-color:transparent;}
+  h1,h2,h3{font-family:Georgia,'Times New Roman',serif;font-weight:800;letter-spacing:.3px;margin:.2em 0;}
+  button{font-family:inherit;cursor:pointer;border:none;border-radius:999px;padding:12px 20px;
+    font-size:15px;font-weight:700;transition:transform .12s ease,opacity .12s ease;}
+  button:active{transform:scale(.96);}
+  button.primario{background:var(--vino);color:var(--blanco);}
+  button.acento{background:var(--brasa);color:var(--blanco);}
+  button.secundario{background:var(--blanco);color:var(--vino);border:2px solid var(--vino);}
+  button.suave{background:transparent;color:var(--dorado);border:1px solid var(--dorado);}
+  button.peligro{background:#9B2C2C;color:var(--blanco);}
+  button:disabled{opacity:.5;}
+  input,select,textarea{font-family:inherit;font-size:15px;padding:10px 12px;border-radius:10px;
+    border:1px solid var(--dorado);background:var(--blanco);color:var(--carbon);width:100%;}
+  .oculto{display:none !important;}
+  #topbar{background:var(--carbon);color:var(--blanco);padding:14px 16px;display:flex;
+    align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:var(--sombra);}
+  #topbar .marca{display:flex;align-items:center;gap:8px;font-size:18px;}
+  #contenedor{max-width:640px;margin:0 auto;padding:14px 14px 100px;}
+  .tarjeta{background:var(--blanco);border-radius:var(--radio);box-shadow:var(--sombra);
+    padding:16px;margin-bottom:14px;}
+  .categoria-titulo{color:var(--vino);margin-top:22px;border-bottom:2px solid var(--dorado);
+    padding-bottom:6px;}
+  .producto{display:flex;gap:12px;align-items:center;}
+  .producto img{width:72px;height:72px;border-radius:10px;object-fit:cover;background:var(--crema);flex-shrink:0;}
+  .producto .info{flex:1;}
+  .producto .nombre{font-weight:700;}
+  .producto .desc{font-size:13px;color:#5b5451;}
+  .producto .precio{color:var(--brasa);font-weight:800;margin-top:4px;}
+  .fab-carrito{position:fixed;left:14px;right:14px;bottom:14px;max-width:612px;margin:0 auto;
+    background:var(--vino);color:var(--blanco);border-radius:999px;padding:16px 22px;display:flex;
+    justify-content:space-between;align-items:center;box-shadow:var(--sombra);z-index:40;
+    transition:transform .15s ease;cursor:pointer;}
+  .modal-fondo{position:fixed;inset:0;background:rgba(43,37,35,.55);display:flex;align-items:flex-end;
+    justify-content:center;z-index:60;}
+  .fondo-aviso-urgente{position:fixed;inset:0;background:rgba(122,30,36,.7);display:flex;
+    align-items:center;justify-content:center;z-index:80;padding:16px;}
+  .aviso-urgente{background:var(--blanco);border-radius:20px;max-width:420px;width:100%;
+    padding:26px 22px;text-align:center;box-shadow:var(--sombra);border:4px solid var(--brasa);
+    animation:pulso 1s ease-in-out infinite;}
+  @keyframes pulso{0%,100%{transform:scale(1);}50%{transform:scale(1.03);}}
+  .aviso-urgente .icono{font-size:46px;}
+  .modal{background:var(--blanco);border-radius:20px 20px 0 0;max-width:640px;width:100%;
+    max-height:88vh;overflow-y:auto;padding:20px;animation:subir .18s ease;}
+  @keyframes subir{from{transform:translateY(30px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+  .grupo-opciones{margin:14px 0;}
+  .grupo-opciones .titulo{font-weight:700;color:var(--vino);margin-bottom:6px;}
+  .opcion-fila{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #eee2d2;}
+  .linea-item{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;
+    border-bottom:1px solid #eee2d2;gap:10px;}
+  .badge{display:inline-block;background:var(--dorado);color:var(--carbon);border-radius:999px;
+    font-size:11px;padding:2px 8px;font-weight:700;}
+  .badge.estado-enviado{background:#F0C14B;}
+  .badge.estado-listo{background:#6FA96F;color:white;}
+  .badge.estado-anulado{background:#B55;color:white;}
+  .cuadricula-mesas{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+  .mesa-caja{background:var(--blanco);border-radius:var(--radio);box-shadow:var(--sombra);padding:14px;
+    text-align:center;border:3px solid var(--crema);}
+  .mesa-caja.libre{border-color:#6FA96F;}
+  .mesa-caja.ocupada{border-color:var(--brasa);}
+  .mesa-caja.cuenta{border-color:var(--vino);}
+  .aviso-flotante{position:fixed;top:66px;left:14px;right:14px;max-width:612px;margin:0 auto;
+    background:var(--brasa);color:white;padding:12px 16px;border-radius:12px;box-shadow:var(--sombra);
+    z-index:55;font-weight:700;}
+  .contador{background:var(--crema);border-radius:10px;padding:10px;text-align:center;font-weight:700;
+    color:var(--vino);}
+  .tabs-admin{display:flex;gap:8px;overflow-x:auto;margin-bottom:14px;}
+  .grid-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;}
+  .stat{background:var(--blanco);border-radius:var(--radio);box-shadow:var(--sombra);padding:14px;text-align:center;}
+  .stat .valor{font-size:20px;font-weight:800;color:var(--vino);}
+  .stat .etiqueta{font-size:12px;color:#5b5451;margin-top:2px;}
+  .tabs-admin button{flex-shrink:0;}
+  .fila-tabla{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee2d2;gap:8px;}
+  .texto-chico{font-size:12px;color:#7a736e;}
+  .enlace{background:none;border:none;color:var(--vino);text-decoration:underline;font-weight:700;padding:4px;}
+  label.chica{font-size:12px;color:#5b5451;display:block;margin:10px 0 4px;}
+  .centro{text-align:center;}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="marca" id="marca-topbar">🔥🔪 <strong>Carnes Parrilla</strong></div>
+  <button class="suave" style="color:#fff;border-color:#fff" onclick="abrirSelectorRol()">Cambiar rol</button>
+</div>
+
+<div id="contenedor">
+
+  <!-- Selector de rol -->
+  <div id="vista-selector-rol" class="tarjeta oculto">
+    <h2>¿Quién eres?</h2>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px;">
+      <button class="primario" onclick="irALoginCliente()">Soy cliente</button>
+      <button class="secundario" onclick="irALoginPIN('mesero')">Soy mesero</button>
+      <button class="secundario" onclick="irALoginPIN('cocina')">Soy cocina</button>
+      <button class="secundario" onclick="irALoginPIN('administrador')">Soy administrador</button>
+    </div>
+  </div>
+
+  <!-- Login cliente -->
+  <div id="vista-login-cliente" class="tarjeta oculto">
+    <h2>Bienvenido</h2>
+    <label class="chica">Código de mesa (4 dígitos)</label>
+    <input id="in-codigo-mesa" maxlength="4" inputmode="numeric" placeholder="0000">
+    <label class="chica">¿Cómo quieres que te llamemos?</label>
+    <input id="in-nombre-cliente" placeholder="Tu nombre">
+    <p id="error-login-cliente" class="texto-chico" style="color:#9B2C2C"></p>
+    <button class="primario" style="width:100%;margin-top:14px" onclick="entrarComoCliente()">Entrar</button>
+  </div>
+
+  <!-- Login PIN -->
+  <div id="vista-login-pin" class="tarjeta oculto">
+    <h2 id="titulo-login-pin">Ingresar PIN</h2>
+    <label class="chica">PIN</label>
+    <input id="in-pin" type="password" inputmode="numeric" placeholder="----">
+    <p id="error-login-pin" class="texto-chico" style="color:#9B2C2C"></p>
+    <button class="primario" style="width:100%;margin-top:14px" onclick="entrarConPIN()">Entrar</button>
+  </div>
+
+  <!-- CLIENTE: menú -->
+  <div id="vista-cliente-menu" class="oculto">
+    <div class="tarjeta centro">
+      <div>Mesa <strong id="et-mesa-cliente">-</strong> · <span id="et-nombre-cliente">-</span></div>
+      <div style="display:flex;gap:8px;margin-top:10px;justify-content:center;flex-wrap:wrap;">
+        <button class="secundario" onclick="llamarMesero()">🔔 Llamar al mesero</button>
+        <button class="secundario" onclick="pedirCuentaCliente()">🧾 Pedir la cuenta</button>
+        <button class="suave" onclick="verMisPedidosCliente()">Mis pedidos</button>
+      </div>
+    </div>
+    <div id="selector-tipos-menu" class="oculto" style="display:flex;gap:8px;overflow-x:auto;margin:14px 0;"></div>
+    <div id="menu-categorias"></div>
+  </div>
+
+  <!-- MESERO -->
+  <div id="vista-mesero" class="oculto">
+    <div class="tarjeta">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="margin:0">Mesas de <span id="et-nombre-mesero"></span></h2>
+        <button class="suave" onclick="abrirModalAbrirMesa()">+ Abrir mesa</button>
+      </div>
+    </div>
+    <div id="cuadricula-mesas-mesero" class="cuadricula-mesas"></div>
+  </div>
+
+  <!-- COCINA -->
+  <div id="vista-cocina" class="oculto">
+    <div class="tarjeta"><h2 style="margin:0">Comandas en cocina</h2></div>
+    <div id="lista-comandas"></div>
+  </div>
+
+  <!-- ADMINISTRADOR -->
+  <div id="vista-admin" class="oculto">
+    <div class="tabs-admin">
+      <button class="secundario" onclick="mostrarTabAdmin('productos')">Productos</button>
+      <button class="secundario" onclick="mostrarTabAdmin('tiposmenu')">Tipos de menú</button>
+      <button class="secundario" onclick="mostrarTabAdmin('mesas')">Mesas</button>
+      <button class="secundario" onclick="mostrarTabAdmin('usuarios')">Personal</button>
+      <button class="secundario" onclick="mostrarTabAdmin('marca')">Marca</button>
+      <button class="secundario" onclick="mostrarTabAdmin('config')">Configuración</button>
+      <button class="secundario" onclick="mostrarTabAdmin('estadisticas')">Estadísticas</button>
+    </div>
+    <div id="admin-productos"></div>
+    <div id="admin-tiposmenu" class="oculto"></div>
+    <div id="admin-mesas" class="oculto"></div>
+    <div id="admin-usuarios" class="oculto"></div>
+    <div id="admin-marca" class="oculto"></div>
+    <div id="admin-config" class="oculto"></div>
+    <div id="admin-estadisticas" class="oculto"></div>
+  </div>
+
+</div>
+
+<!-- Barra fija "Mi pedido" (cliente y mesero) -->
+<div id="fab-carrito" class="fab-carrito oculto" onclick="abrirModalCarrito()">
+  <span id="fab-carrito-texto">0 productos</span>
+  <strong id="fab-carrito-total">$0</strong>
+</div>
+
+<!-- Aviso flotante para mesero -->
+<div id="aviso-flotante" class="aviso-flotante oculto"></div>
+
+<div id="capa-modales"></div>
+<div id="capa-avisos"></div>
+
+<script>
+/* ======================= Estado global ======================= */
+var estado = {
+  rol: null,                // 'cliente' | 'mesero' | 'cocina' | 'administrador'
+  usuario: null,            // {nombre, rol}
+  mesa: null,               // numero
+  codigoMesa: null,
+  nombreCliente: null,
+  menuCache: [],
+  opcionesCache: {},
+  tiposMenu: [],
+  tipoMenuActual: '',
+  config: null,
+  carrito: [],              // items en construcción (antes de enviar)
+  modoMeseroTomandoPedido: false,
+  mesaMeseroActual: null,
+  nombreClienteMesero: '',
+  intervaloSondeo: null,
+  pendienteEnvio: null,     // pedido con cuenta regresiva de 10s
+  llamadosVistos: {},       // _fila de LLAMADOS ya encolados, para no duplicar avisos
+  colaAvisos: [],           // llamados pendientes de mostrar al mesero
+  avisoActivo: null,        // llamado que se está mostrando ahora mismo
+  loopAviso: null,          // interval id del sonido+vibración en bucle
+  contextoAudio: null
+};
+
+/* ======================= Utilidad: llamadas al servidor ======================= */
+function llamar(nombreFuncion) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  return new Promise(function (resolve, reject) {
+    google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(function (err) { reject(err); })[nombreFuncion].apply(null, args);
+  });
+}
+
+function formatoCOP(valor) {
+  return '$' + Math.round(valor).toLocaleString('es-CO');
+}
+
+function mostrarError(msg) {
+  alert(msg && msg.message ? msg.message : msg);
+}
+
+/* ======================= Navegación entre vistas ======================= */
+var TODAS_LAS_VISTAS = ['vista-selector-rol', 'vista-login-cliente', 'vista-login-pin',
+  'vista-cliente-menu', 'vista-mesero', 'vista-cocina', 'vista-admin'];
+
+function mostrarVista(id) {
+  TODAS_LAS_VISTAS.forEach(function (v) {
+    document.getElementById(v).classList.toggle('oculto', v !== id);
+  });
+  document.getElementById('fab-carrito').classList.toggle('oculto', id !== 'vista-cliente-menu' && !estado.modoMeseroTomandoPedido);
+  if (estado.intervaloSondeo) { clearInterval(estado.intervaloSondeo); estado.intervaloSondeo = null; }
+  if (id === 'vista-cliente-menu') iniciarSondeoCliente();
+  if (id === 'vista-mesero') iniciarSondeoMesero();
+  if (id === 'vista-cocina') iniciarSondeoCocina();
+}
+
+function abrirSelectorRol() {
+  mostrarVista('vista-selector-rol');
+}
+
+function irALoginCliente() {
+  document.getElementById('error-login-cliente').textContent = '';
+  mostrarVista('vista-login-cliente');
+}
+
+function irALoginPIN(rolEsperado) {
+  estado.rolEnLogin = rolEsperado;
+  document.getElementById('titulo-login-pin').textContent =
+    rolEsperado === 'mesero' ? 'PIN de mesero' :
+    rolEsperado === 'cocina' ? 'PIN de cocina' : 'PIN de administrador';
+  document.getElementById('error-login-pin').textContent = '';
+  document.getElementById('in-pin').value = '';
+  mostrarVista('vista-login-pin');
+}
+
+/* ======================= Login cliente ======================= */
+function entrarComoCliente() {
+  var codigo = document.getElementById('in-codigo-mesa').value.trim();
+  var nombre = document.getElementById('in-nombre-cliente').value.trim();
+  var err = document.getElementById('error-login-cliente');
+  if (!/^[0-9]{4}$/.test(codigo)) { err.textContent = 'El código debe tener 4 dígitos.'; return; }
+  if (!nombre) { err.textContent = 'Escribe tu nombre.'; return; }
+
+  // Buscamos la mesa por código entre todas (el cliente no sabe su número de mesa,
+  // así que probamos validando por cada mesa posible usando el sondeo completo).
+  llamar('obtenerTodasLasMesas').then(function (mesas) {
+    var mesa = mesas.find(function (m) { return String(m.codigo) === codigo; });
+    if (!mesa) { err.textContent = 'Código incorrecto o la mesa no está activa.'; return; }
+    estado.mesa = mesa.numero;
+    estado.codigoMesa = codigo;
+    estado.nombreCliente = nombre;
+    estado.rol = 'cliente';
+    document.getElementById('et-mesa-cliente').textContent = mesa.numero;
+    document.getElementById('et-nombre-cliente').textContent = nombre;
+    cargarMenuYMostrar();
+  }).catch(function (e) { err.textContent = e.message || String(e); });
+}
+
+/* ======================= Login PIN ======================= */
+function entrarConPIN() {
+  var pin = document.getElementById('in-pin').value.trim();
+  var err = document.getElementById('error-login-pin');
+  if (!pin) { err.textContent = 'Escribe tu PIN.'; return; }
+  desbloquearSonidoMesero(); // gesto del usuario: habilita el audio para las alertas
+  llamar('iniciarSesionPIN', pin).then(function (usuario) {
+    if (usuario.rol !== estado.rolEnLogin) {
+      err.textContent = 'Ese PIN no corresponde a este rol.';
+      return;
+    }
+    estado.usuario = usuario;
+    estado.rol = usuario.rol;
+    if (usuario.rol === 'mesero') { document.getElementById('et-nombre-mesero').textContent = usuario.nombre; mostrarVista('vista-mesero'); cargarMesasMesero(); }
+    else if (usuario.rol === 'cocina') { mostrarVista('vista-cocina'); cargarComandas(); }
+    else if (usuario.rol === 'administrador') { mostrarVista('vista-admin'); mostrarTabAdmin('productos'); }
+  }).catch(function (e) { err.textContent = e.message || String(e); });
+}
+
+/* ======================= MENÚ (cliente y mesero tomando pedido) ======================= */
+function cargarMenuYMostrar() {
+  mostrarVista('vista-cliente-menu');
+  llamar('obtenerTiposMenu').then(function (tipos) {
+    estado.tiposMenu = tipos;
+    estado.tipoMenuActual = tipos.length ? tipos[0].id : '';
+    pintarSelectorTiposMenu();
+    cargarProductosDeTipoActual();
+  }).catch(function () {
+    estado.tiposMenu = [];
+    estado.tipoMenuActual = '';
+    cargarProductosDeTipoActual();
+  });
+}
+
+function pintarSelectorTiposMenu() {
+  var cont = document.getElementById('selector-tipos-menu');
+  if (estado.tiposMenu.length <= 1) { cont.innerHTML = ''; cont.classList.add('oculto'); return; }
+  cont.classList.remove('oculto');
+  cont.innerHTML = estado.tiposMenu.map(function (t) {
+    return '<button class="' + (t.id === estado.tipoMenuActual ? 'primario' : 'secundario') +
+      '" onclick="cambiarTipoMenu(\'' + t.id + '\')" style="flex-shrink:0">' + t.nombre + '</button>';
+  }).join('');
+}
+
+function cambiarTipoMenu(idTipo) {
+  estado.tipoMenuActual = idTipo;
+  pintarSelectorTiposMenu();
+  cargarProductosDeTipoActual();
+}
+
+function cargarProductosDeTipoActual() {
+  var clave = 'cp_menu_cache_' + (estado.tipoMenuActual || 'todos');
+  var cache = null;
+  try { cache = JSON.parse(localStorage.getItem(clave) || 'null'); } catch (e) {}
+  if (cache && cache.length) { estado.menuCache = cache; pintarMenu(); }
+  llamar('obtenerMenu', estado.tipoMenuActual || '').then(function (menu) {
+    estado.menuCache = menu;
+    try { localStorage.setItem(clave, JSON.stringify(menu)); } catch (e) {}
+    pintarMenu();
+  }).catch(mostrarError);
+}
+
+function pintarMenu() {
+  var categorias = {};
+  var orden = [];
+  estado.menuCache.forEach(function (p) {
+    if (!categorias[p.categoria]) { categorias[p.categoria] = []; orden.push(p.categoria); }
+    categorias[p.categoria].push(p);
+  });
+  var html = '';
+  orden.forEach(function (cat) {
+    html += '<h3 class="categoria-titulo">' + cat + '</h3>';
+    categorias[cat].forEach(function (p) {
+      html += '<div class="tarjeta producto">' +
+        (p.urlImagen ? '<img src="' + p.urlImagen + '" alt="">' : '<div class="producto img" style="width:72px;height:72px;background:var(--crema);border-radius:10px;flex-shrink:0"></div>') +
+        '<div class="info">' +
+          '<div class="nombre">' + p.nombre + '</div>' +
+          '<div class="desc">' + (p.descripcion || '') + '</div>' +
+          '<div class="precio">' + formatoCOP(p.precio) + '</div>' +
+        '</div>' +
+        '<button class="acento" onclick="abrirProducto(\'' + p.id + '\')">Lo quiero</button>' +
+      '</div>';
+    });
+  });
+  document.getElementById('menu-categorias').innerHTML = html;
+  actualizarFabCarrito();
+}
+
+/* ======================= Modal de producto (opciones) ======================= */
+function abrirProducto(idProducto) {
+  var producto = estado.menuCache.find(function (p) { return String(p.id) === String(idProducto); });
+  if (!producto) return;
+  llamar('obtenerOpcionesProducto', idProducto).then(function (grupos) {
+    var html = '<div class="modal-fondo" onclick="if(event.target===this) cerrarModal()">' +
+      '<div class="modal">' +
+      '<h2>' + producto.nombre + '</h2>' +
+      '<p class="texto-chico">' + (producto.descripcion || '') + '</p>' +
+      '<div class="precio" style="font-size:20px">' + formatoCOP(producto.precio) + '</div>' +
+      '<div id="grupos-opciones-modal"></div>' +
+      '<label class="chica">Cantidad</label>' +
+      '<div style="display:flex;align-items:center;gap:14px;">' +
+        '<button class="suave" onclick="cambiarCantidadModal(-1)">-</button>' +
+        '<strong id="cantidad-modal" style="font-size:18px">1</strong>' +
+        '<button class="suave" onclick="cambiarCantidadModal(1)">+</button>' +
+      '</div>' +
+      '<button class="primario" style="width:100%;margin-top:18px" onclick="agregarAlCarritoDesdeModal(\'' + producto.id + '\')">Agregar a mi pedido</button>' +
+      '</div></div>';
+  document.getElementById('capa-modales').innerHTML = html;
+  var cont = document.getElementById('grupos-opciones-modal');
+  grupos.forEach(function (g, gi) {
+    var bloque = '<div class="grupo-opciones" data-grupo="' + escapeAttr(g.grupo) + '" data-tipo="' + g.tipo + '">' +
+      '<div class="titulo">' + g.grupo + (g.obligatorio ? ' <span class="badge">obligatorio</span>' : '') + '</div>';
+    g.opciones.forEach(function (op, oi) {
+      var nombreInput = 'grupo' + gi;
+      var tipoInput = g.tipo === 'una sola' ? 'radio' : 'checkbox';
+      bloque += '<label class="opcion-fila"><input type="' + tipoInput + '" name="' + nombreInput + '" value="' + escapeAttr(op) + '"> ' + op + '</label>';
+    });
+    bloque += '</div>';
+    cont.innerHTML += bloque;
+  });
+  estado.cantidadModal = 1;
+  }).catch(mostrarError);
+}
+
+function escapeAttr(t) { return String(t).replace(/"/g, '&quot;'); }
+
+function cambiarCantidadModal(delta) {
+  estado.cantidadModal = Math.max(1, (estado.cantidadModal || 1) + delta);
+  document.getElementById('cantidad-modal').textContent = estado.cantidadModal;
+}
+
+function cerrarModal() { document.getElementById('capa-modales').innerHTML = ''; }
+
+function agregarAlCarritoDesdeModal(idProducto) {
+  var producto = estado.menuCache.find(function (p) { return String(p.id) === String(idProducto); });
+  var grupos = document.querySelectorAll('#grupos-opciones-modal .grupo-opciones');
+  var opcionesTexto = [];
+  for (var i = 0; i < grupos.length; i++) {
+    var g = grupos[i];
+    var nombreGrupo = g.getAttribute('data-grupo');
+    var marcados = g.querySelectorAll('input:checked');
+    if (g.querySelector('.badge') && marcados.length === 0) {
+      mostrarError('Selecciona una opción en "' + nombreGrupo + '".');
+      return;
+    }
+    marcados.forEach(function (m) { opcionesTexto.push(nombreGrupo + ': ' + m.value); });
+  }
+  estado.carrito.push({
+    idProducto: producto.id, nombre: producto.nombre, precioUnitario: producto.precio,
+    cantidad: estado.cantidadModal || 1, opciones: opcionesTexto
+  });
+  cerrarModal();
+  actualizarFabCarrito();
+  animarFab();
+}
+
+function animarFab() {
+  var fab = document.getElementById('fab-carrito');
+  fab.style.transform = 'scale(1.05)';
+  setTimeout(function () { fab.style.transform = 'scale(1)'; }, 150);
+}
+
+function totalCarrito() {
+  return estado.carrito.reduce(function (s, it) { return s + it.cantidad * it.precioUnitario; }, 0);
+}
+
+function actualizarFabCarrito() {
+  var fab = document.getElementById('fab-carrito');
+  var cantidad = estado.carrito.reduce(function (s, it) { return s + it.cantidad; }, 0);
+  if (cantidad === 0) { fab.classList.add('oculto'); return; }
+  fab.classList.remove('oculto');
+  document.getElementById('fab-carrito-texto').textContent = cantidad + (cantidad === 1 ? ' producto' : ' productos');
+  document.getElementById('fab-carrito-total').textContent = formatoCOP(totalCarrito());
+}
+
+/* ======================= Modal "Mi pedido" (carrito) ======================= */
+function abrirModalCarrito() {
+  var html = '<div class="modal-fondo" onclick="if(event.target===this) cerrarModal()"><div class="modal">' +
+    '<h2>Mi pedido</h2>' +
+    '<div id="lineas-carrito"></div>' +
+    '<div style="display:flex;justify-content:space-between;font-weight:800;margin-top:10px;">' +
+      '<span>Total</span><span id="total-carrito-modal"></span></div>';
+  if (estado.modoMeseroTomandoPedido) {
+    html += '<p class="texto-chico">Mesa ' + estado.mesaMeseroActual + ' · Cliente: ' + estado.nombreClienteMesero + '</p>';
+  }
+  html += '<button class="primario" style="width:100%;margin-top:16px" id="btn-enviar-pedido" onclick="iniciarEnvioPedido()">Enviar pedido</button>' +
+    '</div></div>';
+  document.getElementById('capa-modales').innerHTML = html;
+  pintarLineasCarrito();
+}
+
+function pintarLineasCarrito() {
+  var html = '';
+  estado.carrito.forEach(function (it, idx) {
+    html += '<div class="linea-item">' +
+      '<div><strong>' + it.cantidad + 'x ' + it.nombre + '</strong>' +
+      (it.opciones.length ? '<div class="texto-chico">' + it.opciones.join(', ') + '</div>' : '') + '</div>' +
+      '<div style="text-align:right">' + formatoCOP(it.cantidad * it.precioUnitario) +
+      '<br><button class="enlace" onclick="quitarDelCarrito(' + idx + ')">Quitar</button></div>' +
+      '</div>';
+  });
+  document.getElementById('lineas-carrito').innerHTML = html || '<p class="texto-chico">Aún no has agregado nada.</p>';
+  var totalEl = document.getElementById('total-carrito-modal');
+  if (totalEl) totalEl.textContent = formatoCOP(totalCarrito());
+  var btn = document.getElementById('btn-enviar-pedido');
+  if (btn) btn.disabled = estado.carrito.length === 0;
+}
+
+function quitarDelCarrito(idx) {
+  estado.carrito.splice(idx, 1);
+  pintarLineasCarrito();
+  actualizarFabCarrito();
+}
+
+/* ======================= Enviar pedido con 10s para cancelar ======================= */
+function iniciarEnvioPedido() {
+  if (!estado.carrito.length) return;
+  var items = estado.carrito.slice();
+  estado.carrito = [];
+  actualizarFabCarrito();
+
+  var segundosRestantes = 10;
+  var html = '<div class="modal-fondo"><div class="modal">' +
+    '<h2>Enviando tu pedido...</h2>' +
+    '<div class="contador" id="contador-envio">Aún puedes cambiar tu pedido (10 s)</div>' +
+    '<button class="peligro" style="width:100%;margin-top:14px" onclick="cancelarEnvioPedido()">Cancelar este pedido</button>' +
+    '</div></div>';
+  document.getElementById('capa-modales').innerHTML = html;
+
+  estado.pendienteEnvio = { items: items };
+  var interval = setInterval(function () {
+    segundosRestantes--;
+    var el = document.getElementById('contador-envio');
+    if (!el) { clearInterval(interval); return; }
+    if (segundosRestantes <= 0) {
+      clearInterval(interval);
+      confirmarEnvioPedido(items);
+    } else {
+      el.textContent = 'Aún puedes cambiar tu pedido (' + segundosRestantes + ' s)';
+    }
+  }, 1000);
+  estado.pendienteEnvio.interval = interval;
+}
+
+function cancelarEnvioPedido() {
+  if (estado.pendienteEnvio) {
+    clearInterval(estado.pendienteEnvio.interval);
+    estado.carrito = estado.pendienteEnvio.items.concat(estado.carrito);
+    estado.pendienteEnvio = null;
+  }
+  cerrarModal();
+  actualizarFabCarrito();
+}
+
+function confirmarEnvioPedido(items) {
+  estado.pendienteEnvio = null;
+  var mesa, codigo, cliente, tomadoPor;
+  if (estado.modoMeseroTomandoPedido) {
+    mesa = estado.mesaMeseroActual;
+    codigo = estado.codigoMeseroActual;
+    cliente = estado.nombreClienteMesero;
+    tomadoPor = estado.usuario.nombre;
+  } else {
+    mesa = estado.mesa; codigo = estado.codigoMesa; cliente = estado.nombreCliente; tomadoPor = 'cliente';
+  }
+  var payload = items.map(function (it) {
+    return { nombre: it.nombre, cantidad: it.cantidad, opciones: it.opciones, precioUnitario: it.precioUnitario };
+  });
+  document.getElementById('capa-modales').innerHTML =
+    '<div class="modal-fondo"><div class="modal centro"><h2>Enviando...</h2></div></div>';
+  reintentarEnvio(mesa, codigo, cliente, tomadoPor, payload, 0);
+}
+
+function reintentarEnvio(mesa, codigo, cliente, tomadoPor, payload, intento) {
+  llamar('crearPedido', mesa, codigo, cliente, tomadoPor, payload).then(function () {
+    cerrarModal();
+    if (estado.modoMeseroTomandoPedido) {
+      terminarTomaPedidoMesero();
+    } else {
+      iniciarSondeoCliente();
+    }
+  }).catch(function (e) {
+    if (intento < 3) {
+      setTimeout(function () { reintentarEnvio(mesa, codigo, cliente, tomadoPor, payload, intento + 1); }, 1500);
+    } else {
+      mostrarError('No se pudo enviar el pedido: ' + (e.message || e));
+      cerrarModal();
+    }
+  });
+}
+
+/* ======================= Sondeo cliente (cada 5s) ======================= */
+function iniciarSondeoCliente() {
+  sondearCliente();
+  estado.intervaloSondeo = setInterval(sondearCliente, 5000);
+}
+
+function sondearCliente() {
+  if (!estado.mesa) return;
+  llamar('sondeoCliente', estado.mesa, estado.codigoMesa).catch(function () {});
+}
+
+function verMisPedidosCliente() {
+  llamar('obtenerPedidosMesa', estado.mesa, estado.codigoMesa).then(function (pedidos) {
+    var html = '<div class="modal-fondo" onclick="if(event.target===this) cerrarModal()"><div class="modal">' +
+      '<h2>Mis pedidos</h2>' + pintarListaPedidos(pedidos, false) + '</div></div>';
+    document.getElementById('capa-modales').innerHTML = html;
+  }).catch(mostrarError);
+}
+
+function pintarListaPedidos(pedidos, conAcciones) {
+  if (!pedidos.length) return '<p class="texto-chico">Todavía no hay pedidos en esta mesa.</p>';
+  var html = '';
+  pedidos.forEach(function (p) {
+    html += '<div class="tarjeta">' +
+      '<div style="display:flex;justify-content:space-between;">' +
+        '<strong>' + p.cliente + '</strong>' +
+        '<span class="badge estado-' + p.estado.replace(' ', '-') + '">' + p.estado + '</span>' +
+      '</div>';
+    p.items.forEach(function (it) {
+      html += '<div class="texto-chico">' + it.cantidad + 'x ' + it.producto +
+        (it.opciones ? ' (' + it.opciones + ')' : '') + ' · ' + formatoCOP(it.subtotal) + '</div>';
+    });
+    if (conAcciones && p.estado === 'enviado') {
+      html += '<div style="margin-top:8px"><button class="enlace" onclick="anularPedidoMesero(\'' + p.idPedido + '\')">Anular pedido</button></div>';
+    }
+    html += '</div>';
+  });
+  return html;
+}
+
+/* ======================= Llamar mesero / pedir cuenta (cliente) ======================= */
+function llamarMesero() {
+  llamar('registrarLlamado', estado.mesa, 'llamar mesero').then(function () {
+    mostrarAvisoTemporal('Avisamos a tu mesero 🔔');
+  }).catch(mostrarError);
+}
+
+function pedirCuentaCliente() {
+  llamar('solicitarCuentaMesa', estado.mesa).then(function () {
+    mostrarAvisoTemporal('Pedimos tu cuenta 🧾');
+    mostrarCuenta(estado.mesa, estado.codigoMesa);
+  }).catch(mostrarError);
+}
+
+function mostrarAvisoTemporal(texto) {
+  var aviso = document.getElementById('aviso-flotante');
+  aviso.textContent = texto;
+  aviso.classList.remove('oculto');
+  setTimeout(function () { aviso.classList.add('oculto'); }, 3000);
+}
+
+function mostrarCuenta(mesa, codigo) {
+  llamar('obtenerCuenta', mesa, codigo).then(pintarCuenta).catch(mostrarError);
+}
+
+function mostrarCuentaMesero(mesa) {
+  llamar('obtenerCuentaMesero', mesa).then(pintarCuenta).catch(mostrarError);
+}
+
+function pintarCuenta(cuenta) {
+    var html = '<div class="modal-fondo" onclick="if(event.target===this) cerrarModal()"><div class="modal">' +
+      '<h2>' + cuenta.restaurante + '</h2>' +
+      '<p class="texto-chico">Mesa ' + cuenta.mesa + ' · Esta es una pre-cuenta. Tu factura electrónica se entrega en caja.</p>';
+    cuenta.personas.forEach(function (p) {
+      html += '<div class="tarjeta"><strong>' + p.cliente + '</strong>';
+      p.items.forEach(function (it) {
+        html += '<div class="texto-chico">' + it.cantidad + 'x ' + it.producto + ' · ' + formatoCOP(it.subtotal) + '</div>';
+      });
+      html += '<div style="text-align:right;font-weight:700">' + formatoCOP(p.subtotal) + '</div></div>';
+    });
+    html += '<div class="tarjeta">' +
+      '<div style="display:flex;justify-content:space-between"><span>Subtotal sin impuesto</span><span>' + formatoCOP(cuenta.subtotalSinImpuesto) + '</span></div>' +
+      '<div style="display:flex;justify-content:space-between"><span>Impuesto al consumo (' + Math.round(cuenta.impuestoPorcentaje*100) + '%)</span><span>' + formatoCOP(cuenta.impuesto) + '</span></div>' +
+      '<label class="opcion-fila"><input type="checkbox" id="chk-propina" onchange="actualizarTotalConPropina(' + cuenta.totalSinPropina + ',' + cuenta.propinaSugeridaPorcentaje + ')"> Incluir propina sugerida (' + Math.round(cuenta.propinaSugeridaPorcentaje*100) + '%)</label>' +
+      '<div style="display:flex;justify-content:space-between;font-weight:800;font-size:18px;margin-top:6px"><span>Total a pagar</span><span id="total-a-pagar">' + formatoCOP(cuenta.totalSinPropina) + '</span></div>' +
+      '</div>' +
+      '<div class="tarjeta"><strong>Medios de pago</strong><div class="texto-chico">' + cuenta.mediosPago.join(' · ') + '</div></div>' +
+      '</div></div>';
+    document.getElementById('capa-modales').innerHTML = html;
+}
+
+function actualizarTotalConPropina(totalSinPropina, propinaPorcentaje) {
+  var incluir = document.getElementById('chk-propina').checked;
+  var total = incluir ? totalSinPropina * (1 + propinaPorcentaje) : totalSinPropina;
+  document.getElementById('total-a-pagar').textContent = formatoCOP(total);
+}
+
+/* ======================= MESERO ======================= */
+function cargarMesasMesero() {
+  llamar('obtenerTodasLasMesas').then(pintarMesasMesero).catch(mostrarError);
+}
+
+function pintarMesasMesero(mesas) {
+  var html = '';
+  mesas.forEach(function (m) {
+    var esMia = String(m.mesero) === String(estado.usuario.nombre);
+    var clase = String(m.estado).toLowerCase() === 'libre' ? 'libre' :
+      (String(m.estado).toLowerCase() === 'cuenta solicitada' ? 'cuenta' : 'ocupada');
+    html += '<div class="mesa-caja ' + clase + '">' +
+      '<div style="font-size:22px;font-weight:800">Mesa ' + m.numero + '</div>' +
+      '<div class="texto-chico">' + m.estado + (m.mesero ? ' · ' + m.mesero : '') + '</div>';
+    if (String(m.estado).toLowerCase() === 'libre') {
+      html += '<button class="suave" style="margin-top:8px" onclick="abrirMesaDesdeGrilla(' + m.numero + ')">Abrir</button>';
+    } else if (esMia) {
+      html += '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:8px">' +
+        '<button class="acento" onclick="iniciarTomaPedidoMesero(' + m.numero + ',\'' + m.codigo + '\')">Tomar pedido</button>' +
+        '<button class="secundario" onclick="verPedidosMesaMesero(' + m.numero + ',\'' + m.codigo + '\')">Ver pedidos</button>' +
+        '<button class="suave" onclick="pedirCuentaDesdeGrilla(' + m.numero + ')">Pedir cuenta</button>' +
+        '<button class="enlace" onclick="cerrarMesaDesdeGrilla(' + m.numero + ')">Cerrar mesa</button>' +
+      '</div>';
+    }
+    html += '</div>';
+  });
+  document.getElementById('cuadricula-mesas-mesero').innerHTML = html;
+}
+
+function abrirModalAbrirMesa() {
+  var html = '<div class="modal-fondo" onclick="if(event.target===this) cerrarModal()"><div class="modal">' +
+    '<h2>Abrir mesa</h2>' +
+    '<label class="chica">Número de mesa</label><input id="in-numero-mesa-abrir" inputmode="numeric">' +
+    '<button class="primario" style="width:100%;margin-top:14px" onclick="confirmarAbrirMesa()">Generar código</button>' +
+    '</div></div>';
+  document.getElementById('capa-modales').innerHTML = html;
+}
+
+function abrirMesaDesdeGrilla(numero) {
+  llamar('generarCodigoMesa', numero, estado.usuario.nombre).then(function (r) {
+    mostrarCodigoGenerado(r);
+    cargarMesasMesero();
+  }).catch(mostrarError);
+}
+
+function confirmarAbrirMesa() {
+  var numero = document.getElementById('in-numero-mesa-abrir').value.trim();
+  if (!numero) return;
+  llamar('generarCodigoMesa', numero, estado.usuario.nombre).then(function (r) {
+    mostrarCodigoGenerado(r);
+    cargarMesasMesero();
+  }).catch(mostrarError);
+}
+
+function mostrarCodigoGenerado(r) {
+  document.getElementById('capa-modales').innerHTML =
+    '<div class="modal-fondo" onclick="if(event.target===this) cerrarModal()"><div class="modal centro">' +
+    '<h2>Mesa ' + r.numero + '</h2><p>Código para el cliente:</p>' +
+    '<div style="font-size:42px;font-weight:900;color:var(--vino)">' + r.codigo + '</div>' +
+    '<button class="primario" style="width:100%;margin-top:14px" onclick="cerrarModal()">Listo</button>' +
+    '</div></div>';
+}
+
+function cerrarMesaDesdeGrilla(numero) {
+  if (!confirm('¿Cerrar la mesa ' + numero + '? Quedará libre y el código dejará de funcionar.')) return;
+  llamar('cerrarMesa', numero).then(cargarMesasMesero).catch(mostrarError);
+}
+
+function pedirCuentaDesdeGrilla(numero) {
+  llamar('solicitarCuentaMesa', numero).then(function () {
+    cargarMesasMesero();
+    mostrarCuentaMesero(numero);
+  }).catch(mostrarError);
+}
+
+function verPedidosMesaMesero(numero, codigo) {
+  llamar('obtenerPedidosMesa', numero, codigo).then(function (pedidos) {
+    document.getElementById('capa-modales').innerHTML =
+      '<div class="modal-fondo" onclick="if(event.target===this) cerrarModal()"><div class="modal">' +
+      '<h2>Pedidos mesa ' + numero + '</h2>' + pintarListaPedidos(pedidos, true) + '</div></div>';
+  }).catch(mostrarError);
+}
+
+function anularPedidoMesero(idPedido) {
+  if (!confirm('¿Anular este pedido?')) return;
+  llamar('anularPedido', idPedido).then(function () { cerrarModal(); }).catch(mostrarError);
+}
+
+function iniciarTomaPedidoMesero(numero, codigo) {
+  estado.modoMeseroTomandoPedido = true;
+  estado.mesaMeseroActual = numero;
+  estado.codigoMeseroActual = codigo;
+  estado.carrito = [];
+  var html = '<div class="modal-fondo" onclick="if(event.target===this) salirSinGuardar()"><div class="modal">' +
+    '<h2>Tomar pedido · Mesa ' + numero + '</h2>' +
+    '<label class="chica">¿Cómo quieres que te llamemos? (nombre del cliente)</label>' +
+    '<input id="in-nombre-cliente-mesero">' +
+    '<button class="primario" style="width:100%;margin-top:14px" onclick="confirmarNombreClienteMesero()">Continuar al menú</button>' +
+    '</div></div>';
+  document.getElementById('capa-modales').innerHTML = html;
+}
+
+function salirSinGuardar() {
+  estado.modoMeseroTomandoPedido = false;
+  estado.carrito = [];
+  cerrarModal();
+}
+
+function confirmarNombreClienteMesero() {
+  var nombre = document.getElementById('in-nombre-cliente-mesero').value.trim();
+  if (!nombre) { mostrarError('Escribe el nombre del cliente.'); return; }
+  estado.nombreClienteMesero = nombre;
+  cerrarModal();
+  if (estado.menuCache.length) { mostrarMenuParaMesero(); }
+  else {
+    llamar('obtenerMenu').then(function (menu) { estado.menuCache = menu; mostrarMenuParaMesero(); }).catch(mostrarError);
+  }
+}
+
+function mostrarMenuParaMesero() {
+  var categorias = {};
+  var orden = [];
+  estado.menuCache.forEach(function (p) {
+    if (!categorias[p.categoria]) { categorias[p.categoria] = []; orden.push(p.categoria); }
+    categorias[p.categoria].push(p);
+  });
+  var html = '<div class="modal-fondo"><div class="modal">' +
+    '<h2>Menú · Mesa ' + estado.mesaMeseroActual + ' (' + estado.nombreClienteMesero + ')</h2>';
+  orden.forEach(function (cat) {
+    html += '<h3 class="categoria-titulo">' + cat + '</h3>';
+    categorias[cat].forEach(function (p) {
+      html += '<div class="tarjeta producto">' +
+        '<div class="info"><div class="nombre">' + p.nombre + '</div><div class="precio">' + formatoCOP(p.precio) + '</div></div>' +
+        '<button class="acento" onclick="abrirProducto(\'' + p.id + '\')">Lo quiero</button></div>';
+    });
+  });
+  html += '<button class="secundario" style="width:100%;margin-top:10px" onclick="salirSinGuardar()">Cerrar sin enviar</button>' +
+    '</div></div>';
+  document.getElementById('capa-modales').innerHTML = html;
+  document.getElementById('fab-carrito').classList.remove('oculto');
+  actualizarFabCarrito();
+}
+
+function terminarTomaPedidoMesero() {
+  estado.modoMeseroTomandoPedido = false;
+  estado.mesaMeseroActual = null;
+  estado.nombreClienteMesero = '';
+  document.getElementById('fab-carrito').classList.add('oculto');
+  cargarMesasMesero();
+}
+
+/* ======================= Sondeo mesero (avisos con sonido/vibración) ======================= */
+function iniciarSondeoMesero() {
+  sondearMesero();
+  estado.intervaloSondeo = setInterval(sondearMesero, 5000);
+}
+
+function sondearMesero() {
+  if (!estado.usuario) return;
+  llamar('sondeoMesero', estado.usuario.nombre).then(function (r) {
+    pintarMesasMesero(r.mesas);
+    r.llamados.forEach(function (l) {
+      if (!estado.llamadosVistos[l._fila]) {
+        estado.llamadosVistos[l._fila] = true;
+        estado.colaAvisos.push(l);
+      }
+    });
+    procesarColaAvisos();
+  }).catch(function () {});
+}
+
+/* --- Alerta urgente para el mesero: sonido real + vibración en bucle
+   hasta que confirme. Esto es lo que diferencia la app de un simple
+   menú QR: el mesero no puede ignorar un llamado por accidente. --- */
+
+function desbloquearSonidoMesero() {
+  // Los navegadores móviles solo permiten crear/activar el audio dentro
+  // de un gesto del usuario; aprovechamos el toque en "Entrar" del login.
+  try {
+    estado.contextoAudio = estado.contextoAudio || new (window.AudioContext || window.webkitAudioContext)();
+    if (estado.contextoAudio.state === 'suspended') estado.contextoAudio.resume();
+  } catch (e) {}
+}
+
+function reproducirSonidoAviso() {
+  try {
+    var ctx = estado.contextoAudio = estado.contextoAudio || new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume();
+    [0, 220, 440].forEach(function (retraso, i) {
+      setTimeout(function () {
+        var osc = ctx.createOscillator();
+        var ganancia = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = i % 2 === 0 ? 880 : 1175;
+        ganancia.gain.value = 0.18;
+        osc.connect(ganancia);
+        ganancia.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.18);
+      }, retraso);
+    });
+  } catch (e) {}
+}
+
+function vibrarAviso() {
+  try { if (navigator.vibrate) navigator.vibrate([250, 100, 250, 100, 250]); } catch (e) {}
+}
+
+function procesarColaAvisos() {
+  if (estado.avisoActivo || !estado.colaAvisos.length) return;
+  var llamado = estado.colaAvisos.shift();
+  estado.avisoActivo = llamado;
+  mostrarAvisoUrgente(llamado);
+  reproducirSonidoAviso();
+  vibrarAviso();
+  estado.loopAviso = setInterval(function () {
+    reproducirSonidoAviso();
+    vibrarAviso();
+  }, 2200);
+}
+
+function mostrarAvisoUrgente(llamado) {
+  var textos = {
+    'llamar mesero': { icono: '🔔', texto: 'La mesa ' + llamado.mesa + ' te está llamando' },
+    'pedido listo': { icono: '🍽️', texto: 'El pedido de la mesa ' + llamado.mesa + ' está listo' },
+    'pedir cuenta': { icono: '🧾', texto: 'La mesa ' + llamado.mesa + ' pidió la cuenta' }
+  };
+  var info = textos[llamado.tipo] || { icono: '🔔', texto: 'Mesa ' + llamado.mesa };
+  document.getElementById('capa-avisos').innerHTML =
+    '<div class="fondo-aviso-urgente"><div class="aviso-urgente">' +
+    '<div class="icono">' + info.icono + '</div>' +
+    '<h2>' + info.texto + '</h2>' +
+    '<button class="primario" style="width:100%;margin-top:14px" onclick="confirmarAvisoUrgente()">Entendido</button>' +
+    '</div></div>';
+}
+
+function confirmarAvisoUrgente() {
+  if (estado.loopAviso) { clearInterval(estado.loopAviso); estado.loopAviso = null; }
+  document.getElementById('capa-avisos').innerHTML = '';
+  var llamado = estado.avisoActivo;
+  estado.avisoActivo = null;
+  if (llamado && llamado._fila) {
+    llamar('atenderLlamado', llamado._fila).catch(function () {});
+  }
+  procesarColaAvisos();
+}
+
+/* ======================= COCINA ======================= */
+function iniciarSondeoCocina() {
+  cargarComandas();
+  estado.intervaloSondeo = setInterval(cargarComandas, 5000);
+}
+
+function cargarComandas() {
+  llamar('obtenerComandasCocina').then(pintarComandas).catch(function () {});
+}
+
+function pintarComandas(pedidos) {
+  if (!pedidos.length) { document.getElementById('lista-comandas').innerHTML = '<p class="texto-chico">No hay comandas pendientes.</p>'; return; }
+  var html = '';
+  pedidos.forEach(function (p) {
+    html += '<div class="tarjeta">' +
+      '<div style="display:flex;justify-content:space-between"><strong>Mesa ' + p.mesa + ' · ' + p.cliente + '</strong>' +
+      '<span class="texto-chico">' + new Date(p.horaEnvio).toLocaleTimeString('es-CO') + '</span></div>';
+    p.items.forEach(function (it) {
+      html += '<div>' + it.cantidad + 'x ' + it.producto + (it.opciones ? '<div class="texto-chico">' + it.opciones + '</div>' : '') + '</div>';
+    });
+    html += '<button class="primario" style="width:100%;margin-top:10px" onclick="marcarListo(\'' + p.idPedido + '\')">Listo</button></div>';
+  });
+  document.getElementById('lista-comandas').innerHTML = html;
+}
+
+function marcarListo(idPedido) {
+  llamar('marcarPedidoListo', idPedido).then(cargarComandas).catch(mostrarError);
+}
+
+/* ======================= ADMINISTRADOR ======================= */
+function mostrarTabAdmin(tab) {
+  ['productos', 'tiposmenu', 'mesas', 'usuarios', 'marca', 'config', 'estadisticas'].forEach(function (t) {
+    document.getElementById('admin-' + t).classList.toggle('oculto', t !== tab);
+  });
+  if (tab === 'productos') cargarAdminProductos();
+  if (tab === 'tiposmenu') cargarAdminTiposMenu();
+  if (tab === 'mesas') cargarAdminMesas();
+  if (tab === 'usuarios') cargarAdminUsuarios();
+  if (tab === 'marca') cargarAdminMarca();
+  if (tab === 'config') cargarAdminConfig();
+  if (tab === 'estadisticas') cargarAdminEstadisticas();
+}
+
+function cargarAdminProductos() {
+  llamar('obtenerProductosAdmin').then(function (productos) {
+    var html = '<button class="primario" onclick="abrirFormProducto(null)">+ Nuevo producto</button>';
+    productos.forEach(function (p) {
+      html += '<div class="tarjeta fila-tabla" style="display:block">' +
+        '<div style="display:flex;justify-content:space-between">' +
+        '<strong>' + p.nombre + '</strong><span>' + formatoCOP(p.precio) + '</span></div>' +
+        '<div class="texto-chico">' + p.categoria + ' · ' + (String(p.disponible).toLowerCase().indexOf('s')===0 ? 'Disponible' : 'Agotado') + '</div>' +
+        '<div style="margin-top:6px;display:flex;gap:10px">' +
+        '<button class="enlace" onclick="abrirFormProducto(\'' + p.id + '\')">Editar</button>' +
+        '<button class="enlace" onclick="editarOpcionesProducto(\'' + p.id + '\')">Opciones</button>' +
+        '<button class="enlace" style="color:#9B2C2C" onclick="confirmarEliminarProducto(\'' + p.id + '\')">Eliminar</button>' +
+        '</div></div>';
+    });
+    document.getElementById('admin-productos').innerHTML = html;
+  }).catch(mostrarError);
+}
+
+function abrirFormProducto(id) {
+  Promise.all([llamar('obtenerProductosAdmin'), llamar('obtenerTiposMenuAdmin')]).then(function (r) {
+    var productos = r[0], tipos = r[1];
+    var p = id ? productos.find(function (x) { return String(x.id) === String(id); }) : null;
+    p = p || { id: '', categoria: '', nombre: '', descripcion: '', precio: '', urlImagen: '', disponible: 'si', orden: productos.length + 1, tipoMenu: tipos.length ? tipos[0].id : '' };
+    var opcionesTipo = '<option value="">Sin tipo (visible en todos)</option>' + tipos.map(function (t) {
+      return '<option value="' + escapeAttr(t.id) + '"' + (String(t.id) === String(p.tipoMenu) ? ' selected' : '') + '>' + t.nombre + '</option>';
+    }).join('');
+    var html = '<div class="modal-fondo" onclick="if(event.target===this) cerrarModal()"><div class="modal">' +
+      '<h2>' + (id ? 'Editar producto' : 'Nuevo producto') + '</h2>' +
+      '<label class="chica">Tipo de menú</label><select id="pf-tipomenu">' + opcionesTipo + '</select>' +
+      '<label class="chica">Categoría</label><input id="pf-categoria" value="' + escapeAttr(p.categoria) + '">' +
+      '<label class="chica">Nombre</label><input id="pf-nombre" value="' + escapeAttr(p.nombre) + '">' +
+      '<label class="chica">Descripción</label><input id="pf-descripcion" value="' + escapeAttr(p.descripcion) + '">' +
+      '<label class="chica">Precio (con impuesto incluido)</label><input id="pf-precio" type="number" value="' + p.precio + '">' +
+      '<label class="chica">URL de imagen (WebP liviana recomendada)</label><input id="pf-imagen" value="' + escapeAttr(p.urlImagen) + '">' +
+      '<label class="chica">Orden</label><input id="pf-orden" type="number" value="' + p.orden + '">' +
+      '<label class="opcion-fila"><input type="checkbox" id="pf-disponible" ' + (String(p.disponible).toLowerCase().indexOf('s')===0 ? 'checked' : '') + '> Disponible</label>' +
+      '<button class="primario" style="width:100%;margin-top:14px" onclick="guardarProductoForm(\'' + escapeAttr(p.id) + '\')">Guardar</button>' +
+      '</div></div>';
+    document.getElementById('capa-modales').innerHTML = html;
+  }).catch(mostrarError);
+}
+
+function guardarProductoForm(id) {
+  var producto = {
+    id: id || '',
+    tipoMenu: document.getElementById('pf-tipomenu').value,
+    categoria: document.getElementById('pf-categoria').value.trim(),
+    nombre: document.getElementById('pf-nombre').value.trim(),
+    descripcion: document.getElementById('pf-descripcion').value.trim(),
+    precio: Number(document.getElementById('pf-precio').value),
+    urlImagen: document.getElementById('pf-imagen').value.trim(),
+    orden: Number(document.getElementById('pf-orden').value),
+    disponible: document.getElementById('pf-disponible').checked ? 'si' : 'no'
+  };
+  llamar('guardarProducto', producto).then(function () {
+    cerrarModal();
+    cargarAdminProductos();
+    limpiarCacheMenuCliente();
+  }).catch(mostrarError);
+}
+
+function confirmarEliminarProducto(id) {
+  if (!confirm('¿Eliminar este producto y sus opciones?')) return;
+  llamar('eliminarProducto', id).then(function () {
+    cargarAdminProductos();
+    limpiarCacheMenuCliente();
+  }).catch(mostrarError);
+}
+
+function limpiarCacheMenuCliente() {
+  try {
+    Object.keys(localStorage).forEach(function (clave) {
+      if (clave.indexOf('cp_menu_cache') === 0) localStorage.removeItem(clave);
+    });
+  } catch (e) {}
+}
+
+/* ---- Tipos de menú ---- */
+function cargarAdminTiposMenu() {
+  llamar('obtenerTiposMenuAdmin').then(function (tipos) {
+    var html = '<p class="texto-chico">Crea varios tipos (Desayuno, Almuerzo, Carta...) si quieres que el cliente elija entre menús distintos según la hora o el día. Con uno solo, el cliente no ve selector.</p>' +
+      '<button class="primario" onclick="abrirFormTipoMenu(null)">+ Nuevo tipo de menú</button>';
+    tipos.forEach(function (t) {
+      html += '<div class="fila-tabla"><div><strong>' + t.nombre + '</strong>' +
+        '<div class="texto-chico">Orden ' + t.orden + ' · ' + (esSiTexto_(t.activo) ? 'Activo' : 'Oculto') + '</div></div>' +
+        '<div><button class="enlace" onclick="abrirFormTipoMenu(\'' + escapeAttr(t.id) + '\')">Editar</button>' +
+        '<button class="enlace" style="color:#9B2C2C" onclick="eliminarTipoMenuAdmin(\'' + escapeAttr(t.id) + '\')">Eliminar</button></div></div>';
+    });
+    document.getElementById('admin-tiposmenu').innerHTML = html;
+  }).catch(mostrarError);
+}
+
+function esSiTexto_(v) { return String(v || '').trim().toLowerCase().indexOf('s') === 0; }
+
+function abrirFormTipoMenu(id) {
+  llamar('obtenerTiposMenuAdmin').then(function (tipos) {
+    var t = id ? tipos.find(function (x) { return String(x.id) === String(id); }) : null;
+    t = t || { id: '', nombre: '', orden: tipos.length + 1, activo: 'si' };
+    var html = '<div class="modal-fondo" onclick="if(event.target===this) cerrarModal()"><div class="modal">' +
+      '<h2>' + (id ? 'Editar tipo de menú' : 'Nuevo tipo de menú') + '</h2>' +
+      '<label class="chica">Nombre (ej. Desayuno, Almuerzo, Carta)</label><input id="tmf-nombre" value="' + escapeAttr(t.nombre) + '">' +
+      '<label class="chica">Orden</label><input id="tmf-orden" type="number" value="' + t.orden + '">' +
+      '<label class="opcion-fila"><input type="checkbox" id="tmf-activo" ' + (esSiTexto_(t.activo) ? 'checked' : '') + '> Visible para los clientes</label>' +
+      '<button class="primario" style="width:100%;margin-top:14px" onclick="guardarTipoMenuForm(\'' + escapeAttr(t.id) + '\')">Guardar</button>' +
+      '</div></div>';
+    document.getElementById('capa-modales').innerHTML = html;
+  }).catch(mostrarError);
+}
+
+function guardarTipoMenuForm(id) {
+  var tipo = {
+    id: id || '',
+    nombre: document.getElementById('tmf-nombre').value.trim(),
+    orden: Number(document.getElementById('tmf-orden').value) || 0,
+    activo: document.getElementById('tmf-activo').checked ? 'si' : 'no'
+  };
+  if (!tipo.nombre) { mostrarError('Escribe un nombre para el tipo de menú.'); return; }
+  llamar('guardarTipoMenu', tipo).then(function () {
+    cerrarModal();
+    cargarAdminTiposMenu();
+  }).catch(mostrarError);
+}
+
+function eliminarTipoMenuAdmin(id) {
+  if (!confirm('¿Eliminar este tipo de menú?')) return;
+  llamar('eliminarTipoMenu', id).then(cargarAdminTiposMenu).catch(mostrarError);
+}
+
+/* ---- Mesas (crear/eliminar números de mesa) ---- */
+function cargarAdminMesas() {
+  llamar('obtenerTodasLasMesas').then(function (mesas) {
+    var html = '<p class="texto-chico">Aquí defines cuántas mesas físicas tiene el restaurante. Abrir una mesa para un cliente (generar su código de 4 dígitos) lo sigue haciendo el mesero desde su pantalla.</p>' +
+      '<div style="display:flex;gap:8px;margin-bottom:10px"><input id="mf-numero-nueva" placeholder="Número de mesa" inputmode="numeric">' +
+      '<button class="primario" onclick="agregarMesaAdmin()">+ Agregar</button></div>';
+    mesas.forEach(function (m) {
+      html += '<div class="fila-tabla"><div><strong>Mesa ' + m.numero + '</strong>' +
+        '<div class="texto-chico">' + m.estado + (m.mesero ? ' · ' + m.mesero : '') + '</div></div>' +
+        '<button class="enlace" style="color:#9B2C2C" onclick="eliminarMesaAdmin(' + m.numero + ')">Eliminar</button></div>';
+    });
+    document.getElementById('admin-mesas').innerHTML = html;
+  }).catch(mostrarError);
+}
+
+function agregarMesaAdmin() {
+  var numero = document.getElementById('mf-numero-nueva').value.trim();
+  if (!numero) return;
+  llamar('crearMesa', numero).then(cargarAdminMesas).catch(mostrarError);
+}
+
+function eliminarMesaAdmin(numero) {
+  if (!confirm('¿Eliminar la mesa ' + numero + '?')) return;
+  llamar('eliminarMesa', numero).then(cargarAdminMesas).catch(mostrarError);
+}
+
+/* ---- Marca (logo, nombre, colores) ---- */
+function cargarAdminMarca() {
+  llamar('obtenerConfig').then(function (cfg) {
+    var colores = [
+      ['colorVino', 'Color principal (botones, encabezados)', cfg.colorVino],
+      ['colorCarbon', 'Color oscuro (textos, barra superior)', cfg.colorCarbon],
+      ['colorCrema', 'Color de fondo', cfg.colorCrema],
+      ['colorBrasa', 'Color de acento (precios, avisos)', cfg.colorBrasa],
+      ['colorDorado', 'Color de detalle (bordes, íconos)', cfg.colorDorado]
+    ];
+    var html = '<div class="tarjeta">' +
+      '<label class="chica">Nombre del restaurante</label><input id="mf-nombre" value="' + escapeAttr(cfg.nombreRestaurante) + '">' +
+      '<label class="chica">URL del logo (cuadrado, liviano)</label><input id="mf-logo" value="' + escapeAttr(cfg.logoUrl) + '">';
+    colores.forEach(function (c) {
+      html += '<label class="chica">' + c[1] + '</label>' +
+        '<input id="mf-' + c[0] + '" type="color" value="' + c[2] + '" style="height:42px;padding:4px">';
+    });
+    html += '<button class="primario" style="width:100%;margin-top:14px" onclick="guardarMarcaForm()">Guardar marca</button>' +
+      '</div>';
+    document.getElementById('admin-marca').innerHTML = html;
+  }).catch(mostrarError);
+}
+
+function guardarMarcaForm() {
+  var cfg = {
+    nombreRestaurante: document.getElementById('mf-nombre').value.trim(),
+    logoUrl: document.getElementById('mf-logo').value.trim(),
+    colorVino: document.getElementById('mf-colorVino').value,
+    colorCarbon: document.getElementById('mf-colorCarbon').value,
+    colorCrema: document.getElementById('mf-colorCrema').value,
+    colorBrasa: document.getElementById('mf-colorBrasa').value,
+    colorDorado: document.getElementById('mf-colorDorado').value
+  };
+  llamar('guardarConfig', cfg).then(function (cfgGuardada) {
+    estado.config = cfgGuardada;
+    aplicarMarca(cfgGuardada);
+    mostrarAvisoTemporal('Marca actualizada');
+  }).catch(mostrarError);
+}
+
+function editarOpcionesProducto(idProducto) {
+  llamar('obtenerOpcionesAdmin', idProducto).then(function (grupos) {
+    var html = '<div class="modal-fondo" onclick="if(event.target===this) cerrarModal()"><div class="modal">' +
+      '<h2>Opciones del producto</h2>' +
+      '<p class="texto-chico">Un grupo por línea con el formato:<br><code>Nombre del grupo | una sola|varias | obligatorio: si/no | opción 1, opción 2, opción 3</code></p>' +
+      '<textarea id="ta-opciones" rows="6">' + gruposATexto(grupos) + '</textarea>' +
+      '<button class="primario" style="width:100%;margin-top:14px" onclick="guardarOpcionesForm(\'' + idProducto + '\')">Guardar opciones</button>' +
+      '</div></div>';
+    document.getElementById('capa-modales').innerHTML = html;
+  }).catch(mostrarError);
+}
+
+function gruposATexto(grupos) {
+  return grupos.map(function (g) {
+    return g.grupo + ' | ' + g.tipo + ' | obligatorio: ' + (g.obligatorio ? 'si' : 'no') + ' | ' + g.opciones.join(', ');
+  }).join('\n');
+}
+
+function guardarOpcionesForm(idProducto) {
+  var texto = document.getElementById('ta-opciones').value;
+  var grupos = texto.split('\n').map(function (linea) { return linea.trim(); }).filter(Boolean).map(function (linea) {
+    var partes = linea.split('|').map(function (s) { return s.trim(); });
+    return {
+      grupo: partes[0] || '',
+      tipo: (partes[1] || 'una sola').indexOf('varias') >= 0 ? 'varias' : 'una sola',
+      obligatorio: (partes[2] || '').toLowerCase().indexOf('si') >= 0,
+      opciones: (partes[3] || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean)
+    };
+  });
+  llamar('guardarOpcionesProducto', idProducto, grupos).then(function () {
+    cerrarModal();
+  }).catch(mostrarError);
+}
+
+function cargarAdminUsuarios() {
+  llamar('obtenerUsuarios').then(function (usuarios) {
+    var html = '<button class="primario" onclick="abrirFormUsuario()">+ Nuevo usuario</button>';
+    usuarios.forEach(function (u) {
+      html += '<div class="fila-tabla"><div><strong>' + u.nombre + '</strong><div class="texto-chico">' + u.rol + ' · PIN ' + u.pin + '</div></div>' +
+        '<div><button class="enlace" onclick="abrirFormUsuario(\'' + escapeAttr(u.nombre) + '\',\'' + u.rol + '\',\'' + u.pin + '\')">Editar</button>' +
+        '<button class="enlace" style="color:#9B2C2C" onclick="eliminarUsuarioAdmin(\'' + escapeAttr(u.nombre) + '\')">Eliminar</button></div></div>';
+    });
+    document.getElementById('admin-usuarios').innerHTML = html;
+  }).catch(mostrarError);
+}
+
+function abrirFormUsuario(nombre, rol, pin) {
+  var html = '<div class="modal-fondo" onclick="if(event.target===this) cerrarModal()"><div class="modal">' +
+    '<h2>' + (nombre ? 'Editar usuario' : 'Nuevo usuario') + '</h2>' +
+    '<label class="chica">Nombre</label><input id="uf-nombre" value="' + (nombre ? escapeAttr(nombre) : '') + '" ' + (nombre ? 'readonly' : '') + '>' +
+    '<label class="chica">Rol</label><select id="uf-rol">' +
+      ['mesero', 'cocina', 'administrador'].map(function (r) { return '<option value="' + r + '"' + (r === rol ? ' selected' : '') + '>' + r + '</option>'; }).join('') +
+    '</select>' +
+    '<label class="chica">PIN</label><input id="uf-pin" value="' + (pin || '') + '">' +
+    '<button class="primario" style="width:100%;margin-top:14px" onclick="guardarUsuarioForm()">Guardar</button>' +
+    '</div></div>';
+  document.getElementById('capa-modales').innerHTML = html;
+}
+
+function guardarUsuarioForm() {
+  var usuario = {
+    nombre: document.getElementById('uf-nombre').value.trim(),
+    rol: document.getElementById('uf-rol').value,
+    pin: document.getElementById('uf-pin').value.trim()
+  };
+  if (!usuario.nombre || !usuario.pin) { mostrarError('Nombre y PIN son obligatorios.'); return; }
+  llamar('guardarUsuario', usuario).then(function () { cerrarModal(); cargarAdminUsuarios(); }).catch(mostrarError);
+}
+
+function eliminarUsuarioAdmin(nombre) {
+  if (!confirm('¿Eliminar a ' + nombre + '?')) return;
+  llamar('eliminarUsuario', nombre).then(cargarAdminUsuarios).catch(mostrarError);
+}
+
+function cargarAdminConfig() {
+  llamar('obtenerConfig').then(function (cfg) {
+    var html = '<div class="tarjeta">' +
+      '<label class="chica">Impuesto al consumo (%)</label><input id="cf-impuesto" type="number" step="0.1" value="' + (cfg.impuestoConsumo * 100) + '">' +
+      '<label class="chica">Propina sugerida (%)</label><input id="cf-propina" type="number" step="0.1" value="' + (cfg.propinaSugerida * 100) + '">' +
+      '<label class="chica">Medios de pago (separados por coma)</label><input id="cf-medios" value="' + escapeAttr(cfg.mediosPago.join(',')) + '">' +
+      '<button class="primario" style="width:100%;margin-top:14px" onclick="guardarConfigForm()">Guardar configuración</button>' +
+      '</div>';
+    document.getElementById('admin-config').innerHTML = html;
+  }).catch(mostrarError);
+}
+
+function guardarConfigForm() {
+  var cfg = {
+    impuestoConsumo: Number(document.getElementById('cf-impuesto').value) / 100,
+    propinaSugerida: Number(document.getElementById('cf-propina').value) / 100,
+    mediosPago: document.getElementById('cf-medios').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean)
+  };
+  llamar('guardarConfig', cfg).then(function () { mostrarAvisoTemporal('Configuración guardada'); }).catch(mostrarError);
+}
+
+/* ---- Estadísticas (ventas, propinas estimadas, productos) ---- */
+estado.rangoEstadisticas = 'hoy';
+estado.graficos = {};
+
+function formatoFechaISO_(fecha) {
+  var y = fecha.getFullYear();
+  var m = String(fecha.getMonth() + 1).padStart(2, '0');
+  var d = String(fecha.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + d;
+}
+
+function calcularRangoFechas(rango) {
+  var hoy = new Date();
+  var desde, hasta = formatoFechaISO_(hoy);
+  if (rango === 'hoy') {
+    desde = formatoFechaISO_(hoy);
+  } else if (rango === '7dias') {
+    var d7 = new Date(hoy); d7.setDate(d7.getDate() - 6);
+    desde = formatoFechaISO_(d7);
+  } else if (rango === 'mes') {
+    desde = formatoFechaISO_(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+  } else if (rango === '30dias') {
+    var d30 = new Date(hoy); d30.setDate(d30.getDate() - 29);
+    desde = formatoFechaISO_(d30);
+  } else if (rango === 'todo') {
+    desde = ''; hasta = '';
+  } else { // personalizado: se toma de los inputs
+    desde = (document.getElementById('est-desde') || {}).value || '';
+    hasta = (document.getElementById('est-hasta') || {}).value || '';
+  }
+  return { desde: desde, hasta: hasta };
+}
+
+function cargarAdminEstadisticas() {
+  var cont = document.getElementById('admin-estadisticas');
+  cont.innerHTML =
+    '<div class="tabs-admin" style="margin-bottom:10px">' +
+      ['hoy:Hoy', '7dias:7 días', 'mes:Este mes', '30dias:30 días', 'todo:Todo', 'personalizado:Personalizado'].map(function (op) {
+        var partes = op.split(':');
+        return '<button class="' + (estado.rangoEstadisticas === partes[0] ? 'primario' : 'secundario') +
+          '" onclick="seleccionarRangoEstadisticas(\'' + partes[0] + '\')">' + partes[1] + '</button>';
+      }).join('') +
+    '</div>' +
+    '<div id="est-personalizado" class="tarjeta oculto" style="display:flex;gap:8px;align-items:end">' +
+      '<div style="flex:1"><label class="chica">Desde</label><input id="est-desde" type="date"></div>' +
+      '<div style="flex:1"><label class="chica">Hasta</label><input id="est-hasta" type="date"></div>' +
+      '<button class="primario" onclick="aplicarRangoPersonalizado()">Aplicar</button>' +
+    '</div>' +
+    '<div id="est-kpis" class="grid-stats"></div>' +
+    '<div class="tarjeta"><h3 style="margin-top:0">Ventas por mesero</h3><canvas id="grafico-mesero" height="180"></canvas></div>' +
+    '<div class="tarjeta"><h3 style="margin-top:0">Propina estimada por mesero</h3>' +
+      '<p class="texto-chico">Estimada = ventas del mesero × propina sugerida configurada. La app no cobra en línea, así que no sabe cuánta propina pagó cada mesa en la realidad.</p>' +
+      '<canvas id="grafico-propina" height="180"></canvas></div>' +
+    '<div class="tarjeta"><h3 style="margin-top:0">Ventas por día</h3><canvas id="grafico-dia" height="180"></canvas></div>' +
+    '<div class="tarjeta"><h3 style="margin-top:0">Productos más vendidos</h3><canvas id="grafico-productos" height="200"></canvas></div>';
+  document.getElementById('est-personalizado').classList.toggle('oculto', estado.rangoEstadisticas !== 'personalizado');
+  if (estado.rangoEstadisticas !== 'personalizado') refrescarEstadisticas();
+}
+
+function seleccionarRangoEstadisticas(rango) {
+  estado.rangoEstadisticas = rango;
+  cargarAdminEstadisticas();
+}
+
+function aplicarRangoPersonalizado() {
+  refrescarEstadisticas();
+}
+
+function refrescarEstadisticas() {
+  var rango = calcularRangoFechas(estado.rangoEstadisticas);
+  llamar('obtenerEstadisticas', rango.desde, rango.hasta).then(pintarEstadisticas).catch(mostrarError);
+}
+
+function pintarEstadisticas(data) {
+  document.getElementById('est-kpis').innerHTML =
+    '<div class="stat"><div class="valor">' + formatoCOP(data.ventasTotales) + '</div><div class="etiqueta">Ventas</div></div>' +
+    '<div class="stat"><div class="valor">' + data.numPedidos + '</div><div class="etiqueta">Pedidos</div></div>' +
+    '<div class="stat"><div class="valor">' + formatoCOP(data.ticketPromedio) + '</div><div class="etiqueta">Ticket promedio</div></div>' +
+    '<div class="stat"><div class="valor">' + formatoCOP(data.propinaEstimadaTotal) + '</div><div class="etiqueta">Propina estimada</div></div>' +
+    '<div class="stat"><div class="valor">' + data.pedidosAnulados + '</div><div class="etiqueta">Pedidos anulados</div></div>';
+
+  dibujarGrafico('grafico-mesero', 'bar', data.porMesero.map(function (m) { return m.mesero; }),
+    [{ label: 'Ventas', data: data.porMesero.map(function (m) { return m.ventas; }), backgroundColor: '#7A1E24' }]);
+
+  dibujarGrafico('grafico-propina', 'bar', data.porMesero.map(function (m) { return m.mesero; }),
+    [{ label: 'Propina estimada', data: data.porMesero.map(function (m) { return m.propinaEstimada; }), backgroundColor: '#C9A45C' }]);
+
+  dibujarGrafico('grafico-dia', 'line', data.porDia.map(function (d) { return d.dia; }),
+    [{ label: 'Ventas', data: data.porDia.map(function (d) { return d.ventas; }), borderColor: '#D9772B', backgroundColor: 'rgba(217,119,43,.25)', fill: true, tension: .25 }]);
+
+  dibujarGrafico('grafico-productos', 'bar', data.topProductos.map(function (p) { return p.producto; }),
+    [{ label: 'Ventas', data: data.topProductos.map(function (p) { return p.ventas; }), backgroundColor: '#2B2523' }],
+    true);
+}
+
+function dibujarGrafico(idCanvas, tipo, etiquetas, datasets, horizontal) {
+  var canvas = document.getElementById(idCanvas);
+  if (!canvas || typeof Chart === 'undefined') return;
+  if (estado.graficos[idCanvas]) estado.graficos[idCanvas].destroy();
+  estado.graficos[idCanvas] = new Chart(canvas.getContext('2d'), {
+    type: tipo,
+    data: { labels: etiquetas, datasets: datasets },
+    options: {
+      indexAxis: horizontal ? 'y' : 'x',
+      plugins: { legend: { display: datasets.length > 1 } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+}
+
+/* ======================= Marca del restaurante ======================= */
+function aplicarMarca(cfg) {
+  var raiz = document.documentElement.style;
+  raiz.setProperty('--vino', cfg.colorVino);
+  raiz.setProperty('--carbon', cfg.colorCarbon);
+  raiz.setProperty('--crema', cfg.colorCrema);
+  raiz.setProperty('--brasa', cfg.colorBrasa);
+  raiz.setProperty('--dorado', cfg.colorDorado);
+  document.title = cfg.nombreRestaurante;
+  document.getElementById('marca-topbar').innerHTML =
+    (cfg.logoUrl ? '<img src="' + cfg.logoUrl + '" alt="" style="height:28px;width:28px;border-radius:6px;object-fit:cover;vertical-align:middle">' : '🔥🔪') +
+    ' <strong>' + cfg.nombreRestaurante + '</strong>';
+}
+
+/* ======================= Inicio ======================= */
+window.onload = function () {
+  llamar('obtenerConfig').then(function (cfg) {
+    estado.config = cfg;
+    aplicarMarca(cfg);
+  }).catch(function () {});
+  abrirSelectorRol();
+};
+</script>
+</body>
+</html>

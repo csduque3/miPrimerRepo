@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="UTF-8" />
+<style>
+  :root{ --vino:#7A1E24; --carbon:#2B2523; --crema:#F4EBDD; --brasa:#D9772B; --dorado:#C9A45C; }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--crema);color:var(--carbon);font-family:Arial,sans-serif;}
+  h1,h2{font-family:Georgia,'Times New Roman',serif;}
+  button{font-family:inherit;cursor:pointer;border:none;border-radius:999px;padding:10px 18px;
+    font-size:14px;font-weight:700;}
+  button.primario{background:var(--vino);color:#fff;}
+  button.secundario{background:#fff;color:var(--vino);border:2px solid var(--vino);}
+  button.peligro{background:#9B2C2C;color:#fff;}
+  input,textarea{font-family:inherit;font-size:14px;padding:8px 10px;border-radius:8px;
+    border:1px solid var(--dorado);width:100%;margin-bottom:8px;}
+  .oculto{display:none !important;}
+  #topbar{background:var(--carbon);color:#fff;padding:14px 18px;}
+  #contenedor{max-width:900px;margin:0 auto;padding:16px;}
+  .tarjeta{background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(43,37,35,.15);padding:16px;margin-bottom:14px;}
+  table{width:100%;border-collapse:collapse;font-size:14px;}
+  th,td{text-align:left;padding:8px;border-bottom:1px solid #eee2d2;}
+  .badge{display:inline-block;border-radius:999px;font-size:11px;padding:3px 10px;font-weight:700;color:#fff;}
+  .badge.activo{background:#6FA96F;}
+  .badge.suspendido{background:#9B2C2C;}
+  .badge.vencido{background:#C9843A;}
+  .acciones{display:flex;gap:6px;flex-wrap:wrap;}
+  .acciones button{padding:6px 12px;font-size:12px;}
+  label{font-size:12px;color:#5b5451;display:block;margin:8px 0 2px;}
+</style>
+</head>
+<body>
+
+<div id="topbar"><h1 style="margin:0;font-size:18px">🗝️ Panel Maestro · Carnes Parrilla</h1></div>
+
+<div id="contenedor">
+
+  <div id="vista-login" class="tarjeta">
+    <h2>Acceso del operador</h2>
+    <p style="font-size:13px;color:#5b5451">Este PIN es solo tuyo, no tiene relación con los PIN de cada restaurante. La primera vez que entres, el PIN que escribas aquí queda guardado como tu PIN de acceso.</p>
+    <label>PIN</label>
+    <input id="in-pin" type="password" inputmode="numeric">
+    <p id="error-login" style="color:#9B2C2C;font-size:13px"></p>
+    <button class="primario" onclick="entrar()">Entrar</button>
+  </div>
+
+  <div id="vista-panel" class="oculto">
+    <div class="tarjeta">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h2 style="margin:0">Restaurantes</h2>
+        <button class="primario" onclick="abrirFormCliente()">+ Nuevo restaurante</button>
+      </div>
+    </div>
+    <div class="tarjeta">
+      <table>
+        <thead><tr><th>Restaurante</th><th>Estado</th><th>Vence</th><th>Notas</th><th>Acciones</th></tr></thead>
+        <tbody id="tabla-clientes"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<div id="capa-modales"></div>
+
+<script>
+var estado = { pin: null };
+
+function llamar(nombreFuncion) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  return new Promise(function (resolve, reject) {
+    google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(function (err) { reject(err); })[nombreFuncion].apply(null, args);
+  });
+}
+
+function mostrarError(msg) { alert(msg && msg.message ? msg.message : msg); }
+function escapeAttr(t) { return String(t == null ? '' : t).replace(/"/g, '&quot;'); }
+
+function entrar() {
+  var pin = document.getElementById('in-pin').value.trim();
+  var err = document.getElementById('error-login');
+  if (!pin) { err.textContent = 'Escribe un PIN.'; return; }
+  llamar('iniciarSesionMaestro', pin).then(function () {
+    estado.pin = pin;
+    document.getElementById('vista-login').classList.add('oculto');
+    document.getElementById('vista-panel').classList.remove('oculto');
+    cargarClientes();
+  }).catch(function (e) { err.textContent = e.message || String(e); });
+}
+
+function cargarClientes() {
+  llamar('obtenerClientes', estado.pin).then(function (clientes) {
+    var hoy = new Date();
+    var html = '';
+    clientes.forEach(function (c) {
+      var vencido = c.fechaVencimiento && hoy.getTime() > new Date(c.fechaVencimiento).getTime();
+      var claseBadge = String(c.estado).toLowerCase() === 'suspendido' ? 'suspendido' : (vencido ? 'vencido' : 'activo');
+      var textoBadge = String(c.estado).toLowerCase() === 'suspendido' ? 'Suspendido' : (vencido ? 'Vencido' : 'Activo');
+      html += '<tr>' +
+        '<td><strong>' + c.nombreRestaurante + '</strong><div style="font-size:11px;color:#7a736e">' + (c.urlWebApp || '') + '</div></td>' +
+        '<td><span class="badge ' + claseBadge + '">' + textoBadge + '</span></td>' +
+        '<td>' + (c.fechaVencimiento ? new Date(c.fechaVencimiento).toLocaleDateString('es-CO') : '-') + '</td>' +
+        '<td style="max-width:160px">' + (c.notas || '') + '</td>' +
+        '<td><div class="acciones">' +
+          '<button class="secundario" onclick="renovar(\'' + c.idCliente + '\')">Renovar 30d</button>' +
+          '<button class="secundario" onclick="suspender(\'' + c.idCliente + '\')">Suspender</button>' +
+          '<button class="peligro" onclick="eliminar(\'' + c.idCliente + '\', \'' + escapeAttr(c.nombreRestaurante) + '\')">Eliminar</button>' +
+        '</div></td>' +
+      '</tr>';
+    });
+    document.getElementById('tabla-clientes').innerHTML = html || '<tr><td colspan="5">Todavía no has agregado restaurantes.</td></tr>';
+  }).catch(mostrarError);
+}
+
+function abrirFormCliente() {
+  var html = '<div style="position:fixed;inset:0;background:rgba(43,37,35,.55);display:flex;align-items:center;justify-content:center;padding:16px">' +
+    '<div class="tarjeta" style="max-width:420px;width:100%">' +
+    '<h2>Nuevo restaurante</h2>' +
+    '<label>Nombre del restaurante</label><input id="cf-nombre">' +
+    '<label>URL de su aplicación web (/exec)</label><input id="cf-url">' +
+    '<label>ID de su Google Sheet (opcional, para tu referencia)</label><input id="cf-sheet">' +
+    '<label>Notas (ej. plan, contacto, teléfono)</label><textarea id="cf-notas" rows="2"></textarea>' +
+    '<div style="display:flex;gap:8px;margin-top:8px">' +
+      '<button class="primario" onclick="guardarCliente()">Crear</button>' +
+      '<button class="secundario" onclick="cerrarModal()">Cancelar</button>' +
+    '</div></div></div>';
+  document.getElementById('capa-modales').innerHTML = html;
+}
+
+function cerrarModal() { document.getElementById('capa-modales').innerHTML = ''; }
+
+function guardarCliente() {
+  var datos = {
+    nombreRestaurante: document.getElementById('cf-nombre').value.trim(),
+    urlWebApp: document.getElementById('cf-url').value.trim(),
+    idHojaCliente: document.getElementById('cf-sheet').value.trim(),
+    notas: document.getElementById('cf-notas').value.trim()
+  };
+  if (!datos.nombreRestaurante) { mostrarError('Escribe el nombre del restaurante.'); return; }
+  llamar('crearCliente', estado.pin, datos).then(function (idCliente) {
+    cerrarModal();
+    cargarClientes();
+    alert('Restaurante creado. Su idCliente es:\n\n' + idCliente +
+      '\n\nAhora, en el proyecto de Apps Script de ESE restaurante, ejecuta desde el editor:\n\n' +
+      'conectarConPanelMaestro("URL_DE_ESTE_PANEL", "' + idCliente + '")');
+  }).catch(mostrarError);
+}
+
+function renovar(idCliente) {
+  llamar('renovarCliente', estado.pin, idCliente, 30).then(cargarClientes).catch(mostrarError);
+}
+
+function suspender(idCliente) {
+  if (!confirm('¿Suspender el acceso de este restaurante ahora mismo?')) return;
+  llamar('suspenderCliente', estado.pin, idCliente).then(cargarClientes).catch(mostrarError);
+}
+
+function eliminar(idCliente, nombre) {
+  if (!confirm('¿Eliminar "' + nombre + '" de este panel? (su app seguirá existiendo, solo deja de controlarse desde aquí)')) return;
+  llamar('eliminarCliente', estado.pin, idCliente).then(cargarClientes).catch(mostrarError);
+}
+</script>
+</body>
+</html>
