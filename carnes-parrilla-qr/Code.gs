@@ -966,7 +966,12 @@ function crearBaseDatos() {
     ]);
   }
 
-  ss.getSheets().forEach(function (hoja) { hoja.autoResizeColumns(1, hoja.getLastColumn()); });
+  ss.getSheets().forEach(function (hoja) {
+    // La hoja "Hoja 1" en blanco que Google crea por defecto no tiene
+    // columnas con datos (getLastColumn() da 0), y autoResizeColumns(1, 0)
+    // lanza "Esas columnas están fuera de los límites".
+    if (hoja.getLastColumn() > 0) hoja.autoResizeColumns(1, hoja.getLastColumn());
+  });
 
   SpreadsheetApp.getUi().alert(
     'Base de datos lista. Usuarios de ejemplo -> Administrador: PIN 1234, Mesero Demo: PIN 1111, Cocina Demo: PIN 2222. Cámbialos antes de abrir al público.'
